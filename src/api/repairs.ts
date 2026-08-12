@@ -1,11 +1,12 @@
 import { z } from "zod";
 import {
-  createRepairEventInputSchema,
+  createAISuggestionEventInputSchema,
   createRepairInputSchema,
+  createTechnicianRepairEventInputSchema,
   repairEventSchema,
   repairSchema,
   updateRepairInputSchema,
-  type CreateRepairEventInput,
+  type CreateTechnicianRepairEventInput,
   type CreateRepairInput,
   type Repair,
   type RepairEvent,
@@ -103,11 +104,26 @@ export const repairsApi = {
     return (await request(`/api/repairs/${encodeURIComponent(id)}/events`, eventsResponseSchema, signal ? { signal } : undefined)).data;
   },
 
-  async addEvent(id: string, input: CreateRepairEventInput): Promise<RepairEvent> {
-    const validInput = createRepairEventInputSchema.parse(input);
+  async addEvent(id: string, input: CreateTechnicianRepairEventInput): Promise<RepairEvent> {
+    const validInput = createTechnicianRepairEventInputSchema.parse(input);
     return (await request(`/api/repairs/${encodeURIComponent(id)}/events`, eventResponseSchema, {
       method: "POST",
       body: JSON.stringify(validInput),
     })).data;
+  },
+
+  async addAISuggestion(
+    id: string,
+    input: { content: string },
+  ): Promise<RepairEvent> {
+    const validInput = createAISuggestionEventInputSchema.parse(input);
+    return (await request(
+      `/api/repairs/${encodeURIComponent(id)}/events/ai-suggestions`,
+      eventResponseSchema,
+      {
+        method: "POST",
+        body: JSON.stringify(validInput),
+      },
+    )).data;
   },
 };

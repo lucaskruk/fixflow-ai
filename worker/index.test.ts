@@ -79,4 +79,60 @@ describe("repairs API", () => {
       error: { code: "NOT_FOUND", message: "Repair not found" },
     });
   });
+
+  it("separates technician records from AI suggestions at the API boundary", async () => {
+    const createResponse = await api.fetch("https://example.test/api/repairs", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        customerName: "Eventos API",
+        brand: "Dell",
+        model: "Latitude",
+        reportedIssue: "No inicia.",
+      }),
+    });
+    const created = (await createResponse.json()) as { data: { id: string } };
+
+    for (const type of ["NOTE", "MEASUREMENT", "DIAGNOSIS", "REPAIR"]) {
+      const response = await api.fetch(
+        `https://example.test/api/repairs/${created.data.id}/events`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ type, content: `Registro ${type}` }),
+        },
+      );
+      expect(response.status).toBe(201);
+    }
+
+    const manualSuggestion = await api.fetch(
+      `https://example.test/api/repairs/${created.data.id}/events`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          type: "AI_SUGGESTION",
+          content: "No debe aceptarse manualmente.",
+        }),
+      },
+    );
+    expect(manualSuggestion.status).toBe(400);
+
+    const aiSuggestion = await api.fetch(
+      `https://example.test/api/repairs/${created.data.id}/events/ai-suggestions`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ content: "Hipótesis generada localmente." }),
+      },
+    );
+    expect(aiSuggestion.status).toBe(201);
+    await expect(aiSuggestion.json()).resolves.toMatchObject({
+      data: { type: "AI_SUGGESTION" },
+    });
+
+    await api.fetch(`https://example.test/api/repairs/${created.data.id}`, {
+      method: "DELETE",
+    });
+  });
 });

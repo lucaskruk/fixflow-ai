@@ -2,10 +2,38 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { parseRepairDraftResponse } from "../ai/webllm-local-ai-service";
 import { ApiError, repairsApi } from "../api/repairs";
 import {
+  createAISuggestionEventInputSchema,
+  createTechnicianRepairEventInputSchema,
   diagnosticAnalysisSchema,
   repairDraftSchema,
   repairSchema,
 } from "./schemas";
+
+describe("repair event creation schemas", () => {
+  it.each(["NOTE", "MEASUREMENT", "DIAGNOSIS", "REPAIR"] as const)(
+    "accepts %s as a technician record",
+    (type) => {
+      expect(createTechnicianRepairEventInputSchema.parse({
+        type,
+        content: "Registro técnico confirmado.",
+      })).toEqual({ type, content: "Registro técnico confirmado." });
+    },
+  );
+
+  it("reserves AI suggestions for the dedicated input", () => {
+    expect(createTechnicianRepairEventInputSchema.safeParse({
+      type: "AI_SUGGESTION",
+      content: "Hipótesis",
+    }).success).toBe(false);
+    expect(createAISuggestionEventInputSchema.safeParse({
+      content: "Hipótesis",
+    }).success).toBe(true);
+    expect(createAISuggestionEventInputSchema.safeParse({
+      type: "AI_SUGGESTION",
+      content: "Hipótesis",
+    }).success).toBe(false);
+  });
+});
 
 describe("repairDraftSchema", () => {
   it("preserves unknown extracted fields as null", () => {

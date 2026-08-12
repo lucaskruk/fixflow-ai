@@ -83,6 +83,19 @@ describe("RepairRepository with a real local D1 binding", () => {
     expect(suggestion?.type).toBe("AI_SUGGESTION");
     expect((await repository.get(created.id))?.diagnosis).toBeNull();
 
+    await repository.addEvent(created.id, {
+      type: "DIAGNOSIS",
+      content: "Diagnóstico confirmado únicamente en el historial.",
+    });
+    await repository.addEvent(created.id, {
+      type: "REPAIR",
+      content: "Reparación confirmada únicamente en el historial.",
+    });
+    expect(await repository.get(created.id)).toMatchObject({
+      diagnosis: null,
+      solution: null,
+    });
+
     await repository.delete(created.id);
   });
 });

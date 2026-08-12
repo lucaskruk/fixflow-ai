@@ -1,28 +1,35 @@
 import { describe, expect, it } from "vitest";
 import {
   DEFAULT_LOCAL_AI_MODEL_ID,
-  DIAGNOSTIC_LOCAL_AI_MODEL_ID,
   defaultLocalAIModel,
   localAIModels,
   createDiagnosticAnalysisJsonSchema,
 } from "./model-config";
 
 describe("local AI model catalog", () => {
-  it("defaults to the low-resource model", () => {
+  it("defaults to Qwen 2.5 0.5B as the minimum compatible model", () => {
     expect(DEFAULT_LOCAL_AI_MODEL_ID).toBe(
-      "SmolLM2-360M-Instruct-q4f32_1-MLC",
+      "Qwen2.5-0.5B-Instruct-q4f16_1-MLC",
     );
-    expect(defaultLocalAIModel.vramMB).toBe(580);
+    expect(defaultLocalAIModel.vramMB).toBe(945);
     expect(defaultLocalAIModel.contextWindowSize).toBe(4096);
     expect(defaultLocalAIModel.requiredFeatures).toEqual([]);
   });
 
-  it("uses Qwen for structured diagnosis and keeps both models selectable", () => {
-    const qwen = localAIModels.find((model) => model.id.startsWith("Qwen2.5"));
-    expect(qwen).toBeDefined();
-    expect(DIAGNOSTIC_LOCAL_AI_MODEL_ID).toBe(qwen!.id);
-    expect(qwen!.contextWindowSize).toBe(4096);
-    expect(defaultLocalAIModel.vramMB).toBeLessThan(qwen!.vramMB);
+  it("offers only the officially precompiled Qwen tiers", () => {
+    expect(localAIModels.map((model) => model.id)).toEqual([
+      "Qwen2.5-0.5B-Instruct-q4f16_1-MLC",
+      "Qwen2.5-1.5B-Instruct-q4f16_1-MLC",
+      "Qwen2.5-3B-Instruct-q4f16_1-MLC",
+    ]);
+    expect(localAIModels.some((model) => model.id.includes("SmolLM"))).toBe(false);
+    expect(localAIModels.map((model) => model.category)).toEqual([
+      "basic",
+      "balanced",
+      "advanced",
+    ]);
+    expect(localAIModels.every((model) => model.contextWindowSize === 4096)).toBe(true);
+    expect(localAIModels.every((model) => model.requiredFeatures.length === 0)).toBe(true);
   });
 
   it("requires a citation when retrieval supplied documents", () => {

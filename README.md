@@ -54,7 +54,8 @@ The web interface provides:
 - natural-language intake with a fully editable manual fallback;
 - repair details, status updates and a typed event timeline;
 - creation of technician notes and measurements without a page reload;
-- local diagnostic suggestions grounded in up to three matched technical documents.
+- local diagnostic suggestions grounded in up to three matched technical documents;
+- a Settings page for a browser-persisted local model choice and cache controls.
 
 “Procesar con IA” loads a browser-local model and proposes an editable repair
 draft. “Analizar diagnóstico” retrieves local documents by deterministic tag
@@ -65,19 +66,23 @@ unavailable.
 
 ## Browser-local AI requirements
 
-Lightweight intake extraction uses `SmolLM2-360M-Instruct-q4f32_1-MLC`
-(approximately 207 MB download and 580 MB VRAM). Structured diagnostic analysis
-uses `Qwen2.5-0.5B-Instruct-q4f16_1-MLC` (approximately 290 MB and 945 MB VRAM),
-because physical testing showed that SmolLM2 does not reliably follow the
-diagnostic JSON contract. Both remain in the model catalog for a future Settings
-page; machines that cannot run Qwen retain every manual workflow.
+Settings offers the officially precompiled Qwen 2.5 0.5B, 1.5B and 3B q4f16
+variants included with WebLLM 0.2.84. The selected model is shared by intake
+extraction and diagnostic analysis and is persisted in `localStorage`. Qwen 0.5B
+(approximately 290 MB download and 945 MB estimated VRAM) is the minimum
+compatible option. SmolLM2 is not selectable or used at runtime because physical
+testing showed that it does not reliably follow the diagnostic JSON contract.
 
 - Use a recent Google Chrome with WebGPU and hardware acceleration enabled.
-- The model downloads only after pressing **Procesar con IA**.
-- Download/load progress is shown in the intake screen.
+- Selecting a model never downloads it. Download starts only from an explicit AI
+  task or **Descargar y probar** in Settings.
+- Download/load progress is shown in Settings and the AI task screens.
 - WebLLM runs in a dedicated Web Worker so the interface remains responsive.
 - Model artifacts use WebLLM's Cache API backend and are reused by the same
   browser origin on later visits.
+- Settings can remove a model from cache only after an explicit confirmation.
+- Changing models unloads the previous engine, and concurrent generations are
+  rejected.
 - No repair text or generated output is sent to an external LLM API.
 - Diagnostic model output is schema-validated, and cited source IDs are rejected
   unless they belong to the documents retrieved for that analysis.

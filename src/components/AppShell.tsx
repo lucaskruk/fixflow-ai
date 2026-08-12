@@ -15,6 +15,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         </Link>
         <nav className="topbar__nav" aria-label="Navegación principal">
           <Link to="/">Reparaciones</Link>
+          <Link to="/settings">Settings</Link>
           <ApiStatus />
         </nav>
       </header>

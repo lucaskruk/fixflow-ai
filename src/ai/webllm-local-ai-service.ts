@@ -14,17 +14,15 @@ import {
   type RepairEvent,
 } from "../domain/schemas";
 import {
-  DEFAULT_LOCAL_AI_MODEL_ID,
-  DIAGNOSTIC_LOCAL_AI_MODEL_ID,
-  LOCAL_AI_MODEL_DOWNLOAD_MB,
-  LOCAL_AI_MODEL_ID,
-  LOCAL_AI_MODEL_LABEL,
-  LOCAL_AI_MODEL_VRAM_MB,
   getLocalAIModel,
   type LocalAIModelId,
   createDiagnosticAnalysisJsonSchema,
   repairDraftJsonSchema,
 } from "./model-config";
+import {
+  loadSelectedLocalAIModelId,
+  persistSelectedLocalAIModelId,
+} from "./model-preferences";
 import { checkWebGPU, type WebGPUCompatibility } from "./webgpu";
 
 export type LocalAIPhase =
@@ -65,6 +63,7 @@ export type LocalAIFailureCode =
   | "GPU_ADAPTER_UNAVAILABLE"
   | "GPU_DEVICE_LOST"
   | "GPU_MEMORY_EXHAUSTED"
+  | "MODEL_FEATURE_UNAVAILABLE"
   | "MODEL_EXECUTION_FAILED";
 
 export type LocalAIFailure = {
@@ -222,7 +221,7 @@ export function buildDiagnosisRequestContent(
 
 export function classifyLocalAIError(
   reason: unknown,
-  modelLabel: string = LOCAL_AI_MODEL_LABEL,
+  modelLabel: string = "el modelo seleccionado",
 ): LocalAIFailure {
   const detail = reason instanceof Error ? reason.message : String(reason);
   const normalized = detail.toLocaleLowerCase();
@@ -293,21 +292,27 @@ export class WebLLMLocalAIService implements LocalAIService {
   private loadedModelId: LocalAIModelId | null = null;
   private probePromise: Promise<WebGPUCompatibility> | null = null;
   private loadPromise: Promise<MLCEngineInterface> | null = null;
+  private generationInProgress = false;
   private listeners = new Set<() => void>();
-  private snapshot: LocalAIRuntimeSnapshot = {
-    phase: "checking",
-    progress: 0,
-    progressText: "Comprobando WebGPU…",
-    error: null,
-    compatibility: null,
-    modelId: LOCAL_AI_MODEL_ID,
-    modelLabel: LOCAL_AI_MODEL_LABEL,
-    downloadMB: LOCAL_AI_MODEL_DOWNLOAD_MB,
-    vramMB: LOCAL_AI_MODEL_VRAM_MB,
-    cached: null,
-    failure: null,
-    debugOutput: null,
-  };
+  private snapshot: LocalAIRuntimeSnapshot;
+
+  constructor() {
+    const selectedModel = getLocalAIModel(loadSelectedLocalAIModelId());
+    this.snapshot = {
+      phase: "checking",
+      progress: 0,
+      progressText: "Comprobando WebGPU…",
+      error: null,
+      compatibility: null,
+      modelId: selectedModel.id,
+      modelLabel: selectedModel.label,
+      downloadMB: selectedModel.downloadMB,
+      vramMB: selectedModel.vramMB,
+      cached: null,
+      failure: null,
+      debugOutput: null,
+    };
+  }
 
   subscribe = (listener: () => void): (() => void) => {
     this.listeners.add(listener);
@@ -346,68 +351,152 @@ export class WebLLMLocalAIService implements LocalAIService {
     return this.probePromise;
   }
 
+  async selectModel(modelId: LocalAIModelId): Promise<void> {
+    if (this.snapshot.phase === "loading" || this.generationInProgress) {
+      throw new Error(
+        "Esperá a que termine la operación de IA antes de cambiar el modelo.",
+      );
+    }
+    if (this.snapshot.modelId === modelId) return;
+
+    const model = getLocalAIModel(modelId);
+    await this.unloadEngine();
+    persistSelectedLocalAIModelId(modelId);
+    const unsupportedFailure =
+      this.snapshot.compatibility?.supported === false
+        ? compatibilityFailure(this.snapshot.compatibility)
+        : null;
+    this.update({
+      phase: unsupportedFailure
+        ? "unsupported"
+        : this.snapshot.compatibility?.supported
+          ? "idle"
+          : "checking",
+      progress: 0,
+      progressText: null,
+      error: unsupportedFailure?.message ?? null,
+      modelId: model.id,
+      modelLabel: model.label,
+      downloadMB: model.downloadMB,
+      vramMB: model.vramMB,
+      cached: null,
+      failure: unsupportedFailure,
+      debugOutput: null,
+    });
+  }
+
+  async loadSelectedModel(): Promise<void> {
+    if (this.generationInProgress) {
+      throw new Error("Ya hay una generación local en curso.");
+    }
+    await this.ensureReady(this.snapshot.modelId);
+  }
+
+  async isModelCached(modelId: LocalAIModelId): Promise<boolean> {
+    const webllm = await import("@mlc-ai/web-llm");
+    const appConfig: AppConfig = {
+      ...webllm.prebuiltAppConfig,
+      cacheBackend: "cache",
+    };
+    return webllm.hasModelInCache(modelId, appConfig);
+  }
+
+  async clearModelCache(modelId: LocalAIModelId): Promise<void> {
+    if (this.snapshot.phase === "loading" || this.generationInProgress) {
+      throw new Error(
+        "Esperá a que termine la operación de IA antes de borrar la caché.",
+      );
+    }
+    if (this.loadedModelId === modelId) await this.unloadEngine();
+
+    const webllm = await import("@mlc-ai/web-llm");
+    const appConfig: AppConfig = {
+      ...webllm.prebuiltAppConfig,
+      cacheBackend: "cache",
+    };
+    await webllm.deleteModelAllInfoInCache(modelId, appConfig);
+    if (this.snapshot.modelId === modelId) {
+      this.update({
+        phase: this.snapshot.compatibility?.supported ? "idle" : this.snapshot.phase,
+        progress: 0,
+        progressText: null,
+        cached: false,
+      });
+    }
+  }
+
   async extractRepair(input: string): Promise<RepairDraft> {
     const cleanInput = input.trim();
     if (!cleanInput) throw new Error("Escribí una descripción antes de procesar.");
-
-    const engine = await this.ensureReady(DEFAULT_LOCAL_AI_MODEL_ID);
-    this.update({
-      phase: "generating",
-      progress: 1,
-      progressText: "Extrayendo datos en este navegador…",
-      error: null,
-      debugOutput: null,
-    });
+    if (this.generationInProgress) {
+      throw new Error("Ya hay una generación local en curso.");
+    }
+    this.generationInProgress = true;
 
     try {
-      const response = await engine.chat.completions.create({
-        messages: [
-          { role: "system", content: extractionSystemPrompt },
-          {
-            role: "user",
-            content: `Extrae los datos explícitos del siguiente ingreso y devuelve JSON:\n\n${cleanInput}`,
-          },
-        ],
-        response_format: {
-          type: "json_object",
-          schema: JSON.stringify(repairDraftJsonSchema),
-        },
-        temperature: 0,
-        top_p: 1,
-        max_tokens: 320,
-        seed: 42,
+      const engine = await this.ensureReady(this.snapshot.modelId);
+      this.update({
+        phase: "generating",
+        progress: 1,
+        progressText: "Extrayendo datos en este navegador…",
+        error: null,
+        debugOutput: null,
       });
-      const choice = response.choices[0];
-      const content = choice?.message.content;
-      this.captureDebugOutput(
-        "repair-extraction",
-        typeof content === "string" ? content : String(content ?? ""),
-        choice?.finish_reason ?? null,
-      );
-      if (choice?.finish_reason === "length") {
-        throw new Error(
-          "El modelo local agotó el límite de respuesta y devolvió una extracción truncada. Volvé a intentar o continuá manualmente.",
+
+      try {
+        const response = await engine.chat.completions.create({
+          messages: [
+            { role: "system", content: extractionSystemPrompt },
+            {
+              role: "user",
+              content: `Extrae los datos explícitos del siguiente ingreso y devuelve JSON:\n\n${cleanInput}`,
+            },
+          ],
+          response_format: {
+            type: "json_object",
+            schema: JSON.stringify(repairDraftJsonSchema),
+          },
+          temperature: 0,
+          top_p: 1,
+          max_tokens: 320,
+          seed: 42,
+        });
+        const choice = response.choices[0];
+        const content = choice?.message.content;
+        this.captureDebugOutput(
+          "repair-extraction",
+          typeof content === "string" ? content : String(content ?? ""),
+          choice?.finish_reason ?? null,
         );
+        if (choice?.finish_reason === "length") {
+          throw new Error(
+            "El modelo local agotó el límite de respuesta y devolvió una extracción truncada. Volvé a intentar o continuá manualmente.",
+          );
+        }
+        if (typeof content !== "string" || !content.trim()) {
+          throw new Error("El modelo local no devolvió contenido.");
+        }
+        const draft = parseRepairDraftResponse(content);
+        this.update({ phase: "ready", progressText: null, error: null, failure: null });
+        return draft;
+      } catch (reason) {
+        const isOutputError =
+          reason instanceof Error &&
+          (reason.message.startsWith("El modelo local") ||
+            reason.message.startsWith("La extracción local"));
+        const failure = isOutputError
+          ? null
+          : classifyLocalAIError(reason, this.snapshot.modelLabel);
+        const message =
+          isOutputError && reason instanceof Error
+            ? reason.message
+            : failure!.message;
+        if (failure?.blocksAI) this.terminateEngine();
+        this.update({ phase: "error", progressText: null, error: message, failure });
+        throw new Error(message);
       }
-      if (typeof content !== "string" || !content.trim()) {
-        throw new Error("El modelo local no devolvió contenido.");
-      }
-      const draft = parseRepairDraftResponse(content);
-      this.update({ phase: "ready", progressText: null, error: null, failure: null });
-      return draft;
-    } catch (reason) {
-      const isOutputError =
-        reason instanceof Error &&
-        (reason.message.startsWith("El modelo local") ||
-          reason.message.startsWith("La extracción local"));
-      const failure = isOutputError ? null : classifyLocalAIError(reason);
-      const message =
-        isOutputError && reason instanceof Error
-          ? reason.message
-          : failure!.message;
-      if (failure?.blocksAI) this.releaseEngine();
-      this.update({ phase: "error", progressText: null, error: message, failure });
-      throw new Error(message);
+    } finally {
+      this.generationInProgress = false;
     }
   }
 
@@ -416,75 +505,85 @@ export class WebLLMLocalAIService implements LocalAIService {
     events: RepairEvent[],
     knowledgeDocuments: KnowledgeDocument[],
   ): Promise<DiagnosticAnalysis> {
+    if (this.generationInProgress) {
+      throw new Error("Ya hay una generación local en curso.");
+    }
+    this.generationInProgress = true;
     const retrievedDocuments = knowledgeDocuments.slice(0, 3);
     const retrievedSourceIds = retrievedDocuments.map((document) => document.id);
-    const engine = await this.ensureReady(DIAGNOSTIC_LOCAL_AI_MODEL_ID);
-    this.update({
-      phase: "generating",
-      progress: 1,
-      progressText: "Analizando evidencia y documentación local…",
-      error: null,
-      debugOutput: null,
-    });
 
     try {
-      const response = await engine.chat.completions.create({
-        messages: [
-          { role: "system", content: diagnosisSystemPrompt },
-          {
-            role: "user",
-            content: buildDiagnosisRequestContent(
-              repair,
-              events,
-              retrievedDocuments,
+      const engine = await this.ensureReady(this.snapshot.modelId);
+      this.update({
+        phase: "generating",
+        progress: 1,
+        progressText: "Analizando evidencia y documentación local…",
+        error: null,
+        debugOutput: null,
+      });
+      try {
+        const response = await engine.chat.completions.create({
+          messages: [
+            { role: "system", content: diagnosisSystemPrompt },
+            {
+              role: "user",
+              content: buildDiagnosisRequestContent(
+                repair,
+                events,
+                retrievedDocuments,
+              ),
+            },
+          ],
+          response_format: {
+            type: "json_object",
+            schema: JSON.stringify(
+              createDiagnosticAnalysisJsonSchema(retrievedSourceIds),
             ),
           },
-        ],
-        response_format: {
-          type: "json_object",
-          schema: JSON.stringify(
-            createDiagnosticAnalysisJsonSchema(retrievedSourceIds),
-          ),
-        },
-        temperature: 0,
-        top_p: 1,
-        max_tokens: 950,
-        seed: 42,
-      });
-      const choice = response.choices[0];
-      const content = choice?.message.content;
-      this.captureDebugOutput(
-        "diagnostic-analysis",
-        typeof content === "string" ? content : String(content ?? ""),
-        choice?.finish_reason ?? null,
-      );
-      if (choice?.finish_reason === "length") {
-        throw new Error(
-          "El modelo local agotó el límite de respuesta y devolvió un análisis truncado. No se guardó ninguna sugerencia.",
+          temperature: 0,
+          top_p: 1,
+          max_tokens: 950,
+          seed: 42,
+        });
+        const choice = response.choices[0];
+        const content = choice?.message.content;
+        this.captureDebugOutput(
+          "diagnostic-analysis",
+          typeof content === "string" ? content : String(content ?? ""),
+          choice?.finish_reason ?? null,
         );
+        if (choice?.finish_reason === "length") {
+          throw new Error(
+            "El modelo local agotó el límite de respuesta y devolvió un análisis truncado. No se guardó ninguna sugerencia.",
+          );
+        }
+        if (typeof content !== "string" || !content.trim()) {
+          throw new Error("El modelo local no devolvió un análisis.");
+        }
+        const analysis = parseDiagnosticAnalysisResponse(
+          content,
+          retrievedSourceIds,
+        );
+        this.update({ phase: "ready", progressText: null, error: null, failure: null });
+        return analysis;
+      } catch (reason) {
+        const isOutputError =
+          reason instanceof Error &&
+          (reason.message.startsWith("El modelo local") ||
+            reason.message.startsWith("El análisis local"));
+        const failure = isOutputError
+          ? null
+          : classifyLocalAIError(reason, this.snapshot.modelLabel);
+        const message =
+          isOutputError && reason instanceof Error
+            ? reason.message
+            : failure!.message;
+        if (failure?.blocksAI) this.terminateEngine();
+        this.update({ phase: "error", progressText: null, error: message, failure });
+        throw new Error(message);
       }
-      if (typeof content !== "string" || !content.trim()) {
-        throw new Error("El modelo local no devolvió un análisis.");
-      }
-      const analysis = parseDiagnosticAnalysisResponse(
-        content,
-        retrievedSourceIds,
-      );
-      this.update({ phase: "ready", progressText: null, error: null, failure: null });
-      return analysis;
-    } catch (reason) {
-      const isOutputError =
-        reason instanceof Error &&
-        (reason.message.startsWith("El modelo local") ||
-          reason.message.startsWith("El análisis local"));
-      const failure = isOutputError ? null : classifyLocalAIError(reason);
-      const message =
-        isOutputError && reason instanceof Error
-          ? reason.message
-          : failure!.message;
-      if (failure?.blocksAI) this.releaseEngine();
-      this.update({ phase: "error", progressText: null, error: message, failure });
-      throw new Error(message);
+    } finally {
+      this.generationInProgress = false;
     }
   }
 
@@ -499,7 +598,7 @@ export class WebLLMLocalAIService implements LocalAIService {
     if (this.engine && this.loadedModelId === modelId) return this.engine;
     if (this.loadPromise) return this.loadPromise;
 
-    if (this.engine || this.worker) this.releaseEngine();
+    if (this.engine || this.worker) await this.unloadEngine();
     this.loadPromise = this.loadModel(modelId);
     try {
       return await this.loadPromise;
@@ -512,6 +611,19 @@ export class WebLLMLocalAIService implements LocalAIService {
     const compatibility = await this.probeCompatibility();
     if (!compatibility.supported) throw new Error(compatibility.message);
     const model = getLocalAIModel(modelId);
+    if (
+      (model.requiredFeatures as readonly string[]).includes("shader-f16") &&
+      !compatibility.shaderF16
+    ) {
+      const failure: LocalAIFailure = {
+        code: "MODEL_FEATURE_UNAVAILABLE",
+        title: "La GPU no cumple los requisitos del modelo",
+        message: `${model.label} requiere shader-f16 y esta GPU no lo ofrece. Elegí otro modelo para continuar usando IA local.`,
+        blocksAI: false,
+      };
+      this.update({ phase: "error", error: failure.message, failure });
+      throw new Error(failure.message);
+    }
 
     this.update({
       phase: "loading",
@@ -568,8 +680,12 @@ export class WebLLMLocalAIService implements LocalAIService {
       });
       return engine;
     } catch (reason) {
-      this.releaseEngine();
-      const failure = classifyLocalAIError(reason);
+      this.terminateEngine();
+      const existingFailure = this.snapshot.failure;
+      const failure =
+        existingFailure?.code === "MODEL_FEATURE_UNAVAILABLE"
+          ? existingFailure
+          : classifyLocalAIError(reason, model.label);
       this.update({
         phase: "error",
         progressText: null,
@@ -580,11 +696,26 @@ export class WebLLMLocalAIService implements LocalAIService {
     }
   }
 
-  private releaseEngine(): void {
+  private terminateEngine(): void {
     this.engine = null;
     this.loadedModelId = null;
     this.worker?.terminate();
     this.worker = null;
+  }
+
+  private async unloadEngine(): Promise<void> {
+    const engine = this.engine;
+    const worker = this.worker;
+    this.engine = null;
+    this.loadedModelId = null;
+    this.worker = null;
+    try {
+      await engine?.unload();
+    } catch {
+      // Terminating the worker below still releases a lost or unhealthy device.
+    } finally {
+      worker?.terminate();
+    }
   }
 
   private captureDebugOutput(

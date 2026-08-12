@@ -13,10 +13,16 @@ import {
   repairStatuses,
   type Repair,
   type RepairEvent,
-  type RepairEventType,
   type RepairStatus,
+  type TechnicianRepairEventType,
 } from "../domain/schemas";
-import { eventLabels, formatDateTime, statusLabels } from "../ui/repair-display";
+import {
+  eventLabels,
+  formatDateTime,
+  statusLabels,
+  technicianEventGuidance,
+  technicianEventTypes,
+} from "../ui/repair-display";
 
 type LocationState = { notice?: string } | null;
 
@@ -96,10 +102,11 @@ export function RepairDetail() {
   const [statusDraft, setStatusDraft] = useState<RepairStatus>("RECEIVED");
   const [statusSaving, setStatusSaving] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(initialNotice ?? null);
-  const [eventType, setEventType] = useState<Extract<RepairEventType, "NOTE" | "MEASUREMENT">>("MEASUREMENT");
+  const [eventType, setEventType] = useState<TechnicianRepairEventType>("MEASUREMENT");
   const [eventContent, setEventContent] = useState("");
   const [eventSubmitting, setEventSubmitting] = useState(false);
   const [eventError, setEventError] = useState<string | null>(null);
+  const [eventMessage, setEventMessage] = useState<string | null>(null);
   const [analysisBusy, setAnalysisBusy] = useState(false);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
   const [analysisMessage, setAnalysisMessage] = useState<string | null>(null);
@@ -154,6 +161,7 @@ export function RepairDetail() {
     if (!repair) return;
     setEventSubmitting(true);
     setEventError(null);
+    setEventMessage(null);
     try {
       const created = await repairsApi.addEvent(repair.id, {
         type: eventType,
@@ -161,6 +169,7 @@ export function RepairDetail() {
       });
       setEvents((current) => [...current, created]);
       setEventContent("");
+      setEventMessage(`Registro agregado al historial: ${eventLabels[created.type]}.`);
     } catch (reason) {
       setEventError(reason instanceof Error ? reason.message : "No pudimos guardar el evento.");
     } finally {
@@ -181,8 +190,7 @@ export function RepairDetail() {
         events,
         documents,
       );
-      const created = await repairsApi.addEvent(repair.id, {
-        type: "AI_SUGGESTION",
+      const created = await repairsApi.addAISuggestion(repair.id, {
         content: serializeDiagnosticAnalysis(analysis),
       });
       setEvents((current) => [...current, created]);
@@ -288,7 +296,7 @@ export function RepairDetail() {
                 <span>{events.length} eventos</span>
               </div>
               {events.length === 0 ? (
-                <p className="empty-copy">Todavía no hay observaciones ni mediciones.</p>
+                <p className="empty-copy">Todavía no hay registros técnicos en el historial.</p>
               ) : (
                 <ol className="timeline">
                   {events.map((event) => (
@@ -330,10 +338,20 @@ export function RepairDetail() {
               <h2>Agregar al historial</h2>
               <label className="field">
                 <span>Tipo de registro</span>
-                <select value={eventType} onChange={(e) => setEventType(e.target.value as typeof eventType)}>
-                  <option value="MEASUREMENT">Medición</option>
-                  <option value="NOTE">Observación</option>
+                <select
+                  value={eventType}
+                  onChange={(event) => {
+                    setEventType(event.target.value as TechnicianRepairEventType);
+                    setEventError(null);
+                    setEventMessage(null);
+                  }}
+                  aria-describedby="event-type-guidance"
+                >
+                  {technicianEventTypes.map((type) => (
+                    <option key={type} value={type}>{eventLabels[type]}</option>
+                  ))}
                 </select>
+                <small id="event-type-guidance">{technicianEventGuidance[eventType].description}</small>
               </label>
               <label className="field">
                 <span>Detalle</span>
@@ -342,10 +360,20 @@ export function RepairDetail() {
                   rows={6}
                   value={eventContent}
                   onChange={(e) => setEventContent(e.target.value)}
-                  placeholder="Entrada 19.4V. Consumo 20mA. 3.3VALW presente, 5VALW ausente."
+                  placeholder={technicianEventGuidance[eventType].placeholder}
                 />
               </label>
+              {(eventType === "DIAGNOSIS" || eventType === "REPAIR") && (
+                <div className="notice notice--caution event-confirmation-note">
+                  <strong>Registro técnico confirmado</strong>
+                  <span>
+                    Esta entrada se guardará en el historial. No modifica automáticamente
+                    el diagnóstico ni la solución resumidos en la ficha.
+                  </span>
+                </div>
+              )}
               {eventError && <div className="notice notice--error" role="alert">{eventError}</div>}
+              {eventMessage && <div className="notice notice--info" role="status">{eventMessage}</div>}
               <button className="button button--primary button--full" type="submit" disabled={eventSubmitting || !eventContent.trim()}>
                 {eventSubmitting ? "Guardando…" : "Agregar al historial"}
               </button>

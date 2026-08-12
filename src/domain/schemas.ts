@@ -19,10 +19,18 @@ export const repairEventTypes = [
   "REPAIR",
 ] as const;
 
+export const technicianRepairEventTypes = [
+  "MEASUREMENT",
+  "NOTE",
+  "DIAGNOSIS",
+  "REPAIR",
+] as const;
+
 export const confidenceLevels = ["low", "medium", "high"] as const;
 
 export const repairStatusSchema = z.enum(repairStatuses);
 export const repairEventTypeSchema = z.enum(repairEventTypes);
+export const technicianRepairEventTypeSchema = z.enum(technicianRepairEventTypes);
 export const confidenceSchema = z.enum(confidenceLevels);
 
 export const repairDraftSchema = z
@@ -100,6 +108,15 @@ export const createRepairEventInputSchema = repairEventSchema.pick({
   content: true,
 });
 
+export const createTechnicianRepairEventInputSchema = z.object({
+  type: technicianRepairEventTypeSchema,
+  content: requiredText,
+}).strict();
+
+export const createAISuggestionEventInputSchema = z.object({
+  content: requiredText,
+}).strict();
+
 export const knowledgeDocumentSchema = z.object({
   id: requiredText,
   title: requiredText,
@@ -133,6 +150,9 @@ export const diagnosticAnalysisEventContentSchema = z.object({
 
 export type RepairStatus = z.infer<typeof repairStatusSchema>;
 export type RepairEventType = z.infer<typeof repairEventTypeSchema>;
+export type TechnicianRepairEventType = z.infer<
+  typeof technicianRepairEventTypeSchema
+>;
 export type Confidence = z.infer<typeof confidenceSchema>;
 export type RepairDraft = z.infer<typeof repairDraftSchema>;
 export type Repair = z.infer<typeof repairSchema>;
@@ -141,6 +161,9 @@ export type UpdateRepairInput = z.infer<typeof updateRepairInputSchema>;
 export type RepairEvent = z.infer<typeof repairEventSchema>;
 export type CreateRepairEventInput = z.infer<
   typeof createRepairEventInputSchema
+>;
+export type CreateTechnicianRepairEventInput = z.infer<
+  typeof createTechnicianRepairEventInputSchema
 >;
 export type KnowledgeDocument = z.infer<typeof knowledgeDocumentSchema>;
 export type DiagnosticAnalysis = z.infer<typeof diagnosticAnalysisSchema>;

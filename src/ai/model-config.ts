@@ -1,28 +1,53 @@
 export const localAIModels = [
   {
-    id: "SmolLM2-360M-Instruct-q4f32_1-MLC",
-    label: "SmolLM2 · 360M · bajo consumo",
-    downloadMB: 207,
-    vramMB: 580,
-    contextWindowSize: 4096,
-    requiredFeatures: [],
-  },
-  {
     id: "Qwen2.5-0.5B-Instruct-q4f16_1-MLC",
-    label: "Qwen 2.5 · 0.5B · mayor calidad",
+    label: "Qwen 2.5 · 0.5B",
+    category: "basic",
+    categoryLabel: "Básico",
     downloadMB: 290,
     vramMB: 945,
     contextWindowSize: 4096,
     requiredFeatures: [],
+    minimumHardware: "WebGPU estable y cerca de 1 GB de memoria disponible para el modelo.",
+    recommendedHardware: "GPU integrada moderna o Apple Silicon con memoria holgada; cerrar otras cargas gráficas.",
+    validation: "Validado en MacBook Pro M4. Puede fallar en Vega 11 con 2 GB de VRAM.",
+  },
+  {
+    id: "Qwen2.5-1.5B-Instruct-q4f16_1-MLC",
+    label: "Qwen 2.5 · 1.5B",
+    category: "balanced",
+    categoryLabel: "Equilibrado",
+    downloadMB: 880,
+    vramMB: 1630,
+    contextWindowSize: 4096,
+    requiredFeatures: [],
+    minimumHardware: "WebGPU estable y al menos 2 GB de memoria disponible para el modelo.",
+    recommendedHardware: "Apple Silicon o GPU con 4 GB o más de memoria disponible.",
+    validation: "Pendiente de validación física en el hardware objetivo.",
+  },
+  {
+    id: "Qwen2.5-3B-Instruct-q4f16_1-MLC",
+    label: "Qwen 2.5 · 3B",
+    category: "advanced",
+    categoryLabel: "Avanzado",
+    downloadMB: 1750,
+    vramMB: 2505,
+    contextWindowSize: 4096,
+    requiredFeatures: [],
+    minimumHardware: "WebGPU estable y al menos 3 GB de memoria disponible para el modelo.",
+    recommendedHardware: "Apple Silicon reciente o GPU con 6 GB o más de memoria disponible.",
+    validation: "Pendiente de validación física en el hardware objetivo.",
   },
 ] as const;
 
 export type LocalAIModelId = (typeof localAIModels)[number]["id"];
 
 export const DEFAULT_LOCAL_AI_MODEL_ID: LocalAIModelId =
-  "SmolLM2-360M-Instruct-q4f32_1-MLC";
-export const DIAGNOSTIC_LOCAL_AI_MODEL_ID: LocalAIModelId =
   "Qwen2.5-0.5B-Instruct-q4f16_1-MLC";
+
+export function isLocalAIModelId(modelId: string): modelId is LocalAIModelId {
+  return localAIModels.some((candidate) => candidate.id === modelId);
+}
 
 export function getLocalAIModel(modelId: LocalAIModelId) {
   const model = localAIModels.find((candidate) => candidate.id === modelId);
@@ -31,15 +56,6 @@ export function getLocalAIModel(modelId: LocalAIModelId) {
 }
 
 export const defaultLocalAIModel = getLocalAIModel(DEFAULT_LOCAL_AI_MODEL_ID);
-
-// Aliases kept at the service boundary. A future Settings page can select a
-// different entry from localAIModels without changing the model integration.
-export const LOCAL_AI_MODEL_ID = defaultLocalAIModel.id;
-export const LOCAL_AI_MODEL_LABEL = defaultLocalAIModel.label;
-export const LOCAL_AI_MODEL_DOWNLOAD_MB = defaultLocalAIModel.downloadMB;
-export const LOCAL_AI_MODEL_VRAM_MB = defaultLocalAIModel.vramMB;
-export const LOCAL_AI_CONTEXT_WINDOW_SIZE =
-  defaultLocalAIModel.contextWindowSize;
 
 const nullableNonEmptyStringSchema = {
   type: ["string", "null"],

@@ -1,8 +1,9 @@
 import { Hono } from "hono";
 import { ZodError } from "zod";
 import {
-  createRepairEventInputSchema,
+  createAISuggestionEventInputSchema,
   createRepairInputSchema,
+  createTechnicianRepairEventInputSchema,
   updateRepairInputSchema,
 } from "../src/domain/schemas";
 import { RepairRepository } from "./repair-repository";
@@ -63,8 +64,23 @@ app.get("/api/repairs/:id/events", async (context) => {
 });
 
 app.post("/api/repairs/:id/events", async (context) => {
-  const input = createRepairEventInputSchema.parse(await context.req.json());
+  const input = createTechnicianRepairEventInputSchema.parse(
+    await context.req.json(),
+  );
   const event = await context.var.repository.addEvent(context.req.param("id"), input);
+  return event
+    ? context.json({ data: event }, 201)
+    : context.json({ error: { code: "NOT_FOUND", message: "Repair not found" } }, 404);
+});
+
+app.post("/api/repairs/:id/events/ai-suggestions", async (context) => {
+  const input = createAISuggestionEventInputSchema.parse(
+    await context.req.json(),
+  );
+  const event = await context.var.repository.addEvent(context.req.param("id"), {
+    type: "AI_SUGGESTION",
+    content: input.content,
+  });
   return event
     ? context.json({ data: event }, 201)
     : context.json({ error: { code: "NOT_FOUND", message: "Repair not found" } }, 404);
