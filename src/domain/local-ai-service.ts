@@ -8,8 +8,8 @@ import type {
 
 /**
  * Boundary for all browser-local model access.
- * Implementations are added in a later delivery; UI and persistence must not
- * import WebLLM directly.
+ * UI and persistence must not import WebLLM directly. Browser runtime details
+ * remain behind implementations of this contract.
  */
 export interface LocalAIService {
   extractRepair(input: string): Promise<RepairDraft>;
@@ -25,4 +25,3 @@ export interface LocalAIService {
     events: RepairEvent[],
   ): Promise<string>;
 }
-

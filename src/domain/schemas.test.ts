@@ -1,4 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { parseRepairDraftResponse } from "../ai/webllm-local-ai-service";
+import { ApiError, repairsApi } from "../api/repairs";
 import {
   diagnosticAnalysisSchema,
   repairDraftSchema,
@@ -33,6 +35,58 @@ describe("repairDraftSchema", () => {
     });
 
     expect(result.success).toBe(false);
+  });
+});
+
+describe("WebLLM repair extraction validation", () => {
+  it("accepts an explicit structured draft without filling missing data", () => {
+    const draft = parseRepairDraftResponse(JSON.stringify({
+      customerName: "Martín",
+      brand: "Lenovo",
+      model: "IdeaPad 3",
+      serialNumber: null,
+      reportedIssue: "No enciende",
+      accessories: ["cargador"],
+      status: null,
+    }));
+
+    expect(draft.serialNumber).toBeNull();
+    expect(draft.status).toBeNull();
+  });
+
+  it("normalizes empty model values without inventing missing data", () => {
+    const draft = parseRepairDraftResponse(JSON.stringify({
+      customerName: "Martín",
+      brand: "Lenovo",
+      model: "IdeaPad 3",
+      serialNumber: "  ",
+      reportedIssue: "No enciende",
+      accessories: ["cargador", ""],
+      status: null,
+    }));
+
+    expect(draft.serialNumber).toBeNull();
+    expect(draft.accessories).toEqual(["cargador"]);
+  });
+
+  it("rejects output with missing fields instead of silently completing it", () => {
+    expect(() => parseRepairDraftResponse(JSON.stringify({
+      customerName: "Martín",
+      brand: "Lenovo",
+    }))).toThrow("no cumplió el formato");
+  });
+
+  it("rejects extra model fields instead of silently accepting inventions", () => {
+    expect(() => parseRepairDraftResponse(JSON.stringify({
+      customerName: null,
+      brand: null,
+      model: null,
+      serialNumber: null,
+      reportedIssue: "No enciende",
+      accessories: [],
+      status: null,
+      probableDiagnosis: "Placa dañada",
+    }))).toThrow("no cumplió el formato");
   });
 });
 
@@ -81,3 +135,47 @@ describe("diagnosticAnalysisSchema", () => {
   });
 });
 
+const apiRepair = {
+  id: "FF-TEST-1",
+  customerName: "Ana",
+  customerPhone: null,
+  brand: "Dell",
+  model: "Latitude",
+  serialNumber: null,
+  reportedIssue: "No inicia",
+  accessories: ["cargador"],
+  status: "RECEIVED",
+  diagnosis: null,
+  solution: null,
+  createdAt: "2026-08-12T10:00:00.000Z",
+  updatedAt: "2026-08-12T10:00:00.000Z",
+};
+
+describe("repairsApi response parsing", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("valida y devuelve una lista de reparaciones", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ data: [apiRepair] }), { status: 200 }),
+    ));
+    await expect(repairsApi.list()).resolves.toEqual([apiRepair]);
+  });
+
+  it("rechaza respuestas exitosas que no cumplen el contrato", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ data: [{ id: "incompleto" }] }), { status: 200 }),
+    ));
+    await expect(repairsApi.list()).rejects.toMatchObject({ code: "INVALID_RESPONSE" });
+  });
+
+  it("conserva el código y mensaje de un error de API", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({
+        error: { code: "NOT_FOUND", message: "Repair not found" },
+      }), { status: 404 }),
+    ));
+    await expect(repairsApi.get("missing")).rejects.toEqual(
+      new ApiError("Repair not found", 404, "NOT_FOUND"),
+    );
+  });
+});

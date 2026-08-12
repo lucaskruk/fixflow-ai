@@ -1,9 +1,11 @@
 # FixFlow AI
 
 FixFlow AI is a local-first proof of concept for laptop repair technicians. The
-current vertical slice includes the React/Vite shell, a Hono API and Cloudflare
-D1 persistence. The future browser-local AI remains isolated behind
-`LocalAIService`; CRUD does not depend on AI availability.
+current vertical slice includes a functional repair dashboard, manual intake,
+repair detail and timeline UI backed by a Hono API and Cloudflare D1. Browser-local
+AI remains isolated behind `LocalAIService`; CRUD does not depend on AI
+availability. Repair intake and evidence-based diagnostic suggestions can be
+structured by WebLLM entirely inside the browser.
 
 ## Requirements
 
@@ -45,6 +47,43 @@ POST   /api/repairs/:id/events
 Success responses use `{ "data": ... }`. Errors use
 `{ "error": { "code": "...", "message": "..." } }`; validation errors also
 contain Zod issues.
+
+The web interface provides:
+
+- a responsive dashboard with the 36 seeded demo repairs;
+- natural-language intake with a fully editable manual fallback;
+- repair details, status updates and a typed event timeline;
+- creation of technician notes and measurements without a page reload;
+- local diagnostic suggestions grounded in up to three matched technical documents.
+
+“Procesar con IA” loads a browser-local model and proposes an editable repair
+draft. “Analizar diagnóstico” retrieves local documents by deterministic tag
+matching, without embeddings or a vector database, and stores the result as an
+`AI_SUGGESTION`. It never changes `repair.diagnosis`; sources are shown with each
+structured analysis. All CRUD workflows remain available when local AI is
+unavailable.
+
+## Browser-local AI requirements
+
+The selected model is `Qwen2.5-0.5B-Instruct-q4f16_1-MLC`, chosen for this
+demo machine (Ryzen 5 2400G, integrated Vega 11 with 2 GB assigned VRAM). Its
+artifacts are approximately 290 MB and WebLLM estimates about 945 MB of VRAM.
+
+- Use a recent Google Chrome with WebGPU and hardware acceleration enabled.
+- The model downloads only after pressing **Procesar con IA**.
+- Download/load progress is shown in the intake screen.
+- WebLLM runs in a dedicated Web Worker so the interface remains responsive.
+- Model artifacts use WebLLM's Cache API backend and are reused by the same
+  browser origin on later visits.
+- No repair text or generated output is sent to an external LLM API.
+- Diagnostic model output is schema-validated, and cited source IDs are rejected
+  unless they belong to the documents retrieved for that analysis.
+
+When WebGPU is unavailable, FixFlow shows a clear warning and keeps the manual
+intake and every CRUD action operational.
+
+The hardware comparison and source-backed choice are documented in
+[docs/model-selection.md](docs/model-selection.md).
 
 ## Tests and build
 
@@ -90,8 +129,9 @@ their use are recorded in [docs/seed-sources.md](docs/seed-sources.md).
 
 ```text
 migrations/           D1 schema and reproducible demo seed
-src/                  React app and shared Zod domain contracts
+src/                  React UI, typed API client and shared Zod contracts
 worker/               Hono API, D1 repository and Workers tests
 docs/seed-sources.md  Official source provenance for demo patterns
+docs/model-selection.md  Local model and hardware rationale
 wrangler.jsonc        Worker, static assets and D1 binding configuration
 ```

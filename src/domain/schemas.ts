@@ -25,15 +25,17 @@ export const repairStatusSchema = z.enum(repairStatuses);
 export const repairEventTypeSchema = z.enum(repairEventTypes);
 export const confidenceSchema = z.enum(confidenceLevels);
 
-export const repairDraftSchema = z.object({
-  customerName: nullableText,
-  brand: nullableText,
-  model: nullableText,
-  serialNumber: nullableText,
-  reportedIssue: nullableText,
-  accessories: z.array(requiredText),
-  status: repairStatusSchema.nullable(),
-});
+export const repairDraftSchema = z
+  .object({
+    customerName: nullableText,
+    brand: nullableText,
+    model: nullableText,
+    serialNumber: nullableText,
+    reportedIssue: nullableText,
+    accessories: z.array(requiredText),
+    status: repairStatusSchema.nullable(),
+  })
+  .strict();
 
 export const repairSchema = z.object({
   id: requiredText,
@@ -103,17 +105,17 @@ export const knowledgeDocumentSchema = z.object({
   title: requiredText,
   tags: z.array(requiredText).min(1),
   content: requiredText,
-});
+}).strict();
 
 export const diagnosticHypothesisSchema = z.object({
   description: requiredText,
   confidence: confidenceSchema,
-});
+}).strict();
 
 export const diagnosticNextStepSchema = z.object({
   action: requiredText,
   reason: requiredText,
-});
+}).strict();
 
 export const diagnosticAnalysisSchema = z.object({
   assessment: requiredText,
@@ -121,7 +123,13 @@ export const diagnosticAnalysisSchema = z.object({
   nextSteps: z.array(diagnosticNextStepSchema),
   missingInformation: z.array(requiredText),
   sources: z.array(requiredText),
-});
+}).strict();
+
+export const diagnosticAnalysisEventContentSchema = z.object({
+  version: z.literal(1),
+  kind: z.literal("DIAGNOSTIC_ANALYSIS"),
+  analysis: diagnosticAnalysisSchema,
+}).strict();
 
 export type RepairStatus = z.infer<typeof repairStatusSchema>;
 export type RepairEventType = z.infer<typeof repairEventTypeSchema>;
@@ -136,3 +144,6 @@ export type CreateRepairEventInput = z.infer<
 >;
 export type KnowledgeDocument = z.infer<typeof knowledgeDocumentSchema>;
 export type DiagnosticAnalysis = z.infer<typeof diagnosticAnalysisSchema>;
+export type DiagnosticAnalysisEventContent = z.infer<
+  typeof diagnosticAnalysisEventContentSchema
+>;

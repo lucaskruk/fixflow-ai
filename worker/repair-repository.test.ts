@@ -52,4 +52,37 @@ describe("RepairRepository with a real local D1 binding", () => {
       .first<{ count: number }>();
     expect(orphanCount?.count).toBe(0);
   });
+
+  it("persists AI provenance without updating the confirmed diagnosis", async () => {
+    const created = await repository.create({
+      customerName: "Separación IA",
+      customerPhone: null,
+      brand: "Exo",
+      model: "R3",
+      serialNumber: null,
+      reportedIssue: "No enciende.",
+      accessories: [],
+      status: "DIAGNOSING",
+    });
+
+    const suggestion = await repository.addEvent(created.id, {
+      type: "AI_SUGGESTION",
+      content: JSON.stringify({
+        version: 1,
+        kind: "DIAGNOSTIC_ANALYSIS",
+        analysis: {
+          assessment: "Todavía no hay mediciones suficientes.",
+          hypotheses: [],
+          nextSteps: [],
+          missingInformation: ["Tensión de entrada"],
+          sources: ["kb-no-power-sequence"],
+        },
+      }),
+    });
+
+    expect(suggestion?.type).toBe("AI_SUGGESTION");
+    expect((await repository.get(created.id))?.diagnosis).toBeNull();
+
+    await repository.delete(created.id);
+  });
 });

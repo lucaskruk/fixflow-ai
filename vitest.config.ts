@@ -17,6 +17,7 @@ export default defineConfig({
   ],
   test: {
     include: ["src/**/*.test.ts", "worker/**/*.test.ts"],
+    maxWorkers: 1,
     setupFiles: ["./worker/test/apply-migrations.ts"],
   },
 });
