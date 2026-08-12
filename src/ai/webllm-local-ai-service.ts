@@ -9,6 +9,8 @@ import {
   repairDraftSchema,
   type DiagnosticAnalysis,
   type KnowledgeDocument,
+  type KnowledgeProposalCandidate,
+  type KnowledgeProposalRepairEvidence,
   type Repair,
   type RepairDraft,
   type RepairEvent,
@@ -17,12 +19,24 @@ import {
   getLocalAIModel,
   type LocalAIModelId,
   createDiagnosticAnalysisJsonSchema,
+  createKnowledgeProposalJsonSchema,
   repairDraftJsonSchema,
 } from "./model-config";
+import {
+  buildKnowledgeProposalRequestContent,
+  parseKnowledgeProposalResponse,
+} from "./knowledge-proposals";
 import {
   loadSelectedLocalAIModelId,
   persistSelectedLocalAIModelId,
 } from "./model-preferences";
+import {
+  buildFinalReportRequestContent,
+  createSafeFinalReportText,
+  finalReportJsonSchema,
+  formatFinalReport,
+  parseFinalReportResponse,
+} from "./final-report";
 import { checkWebGPU, type WebGPUCompatibility } from "./webgpu";
 
 export type LocalAIPhase =
@@ -50,7 +64,7 @@ export type LocalAIRuntimeSnapshot = {
 };
 
 export type LocalAIDebugOutput = {
-  task: "repair-extraction" | "diagnostic-analysis";
+  task: "repair-extraction" | "diagnostic-analysis" | "final-report" | "knowledge-proposal";
   modelId: string;
   finishReason: string | null;
   content: string;
@@ -101,6 +115,38 @@ Reglas obligatorias:
 - sources contiene exclusivamente IDs de knowledgeDocuments usados. No inventes IDs y usa [] si no utilizaste ninguno.
 - Sé conciso: máximo 2 hipótesis, 3 próximos pasos y 3 datos faltantes.
 - La documentación es orientación general: un valor aislado no confirma un componente defectuoso.
+- No agregues claves fuera del esquema.`;
+
+const finalReportSystemPrompt = `Eres un redactor de informes para un taller de reparación de laptops.
+Devuelve únicamente un objeto JSON que cumpla exactamente el esquema solicitado.
+
+Reglas obligatorias:
+- Usa exclusivamente los datos del objeto recibido. No inventes pruebas, resultados, fallas, reparaciones ni estados.
+- Mantén separados el síntoma informado, las pruebas y mediciones, las observaciones, el diagnóstico confirmado, la reparación realizada, el estado final y las recomendaciones.
+- Sólo repair.confirmedDiagnosis y technicianRecords.confirmedDiagnoses pueden alimentar confirmedDiagnosis.
+- Sólo repair.confirmedSolution y technicianRecords.repairsPerformed pueden alimentar repairPerformed.
+- Las sugerencias de IA no se incluyen en el objeto de entrada y nunca son evidencia ni diagnóstico confirmado.
+- Si una sección no tiene registros, devuelve un array vacío; no completes datos ausentes.
+- Las recomendaciones deben ser prudentes, breves y compatibles con el estado registrado. No presentes una hipótesis como hecho.
+- Redacta en español claro, apto para revisión por el técnico y entrega al cliente.
+- No agregues claves fuera del esquema.`;
+
+const knowledgeProposalSystemPrompt = `Eres un asistente local que propone mejoras para la base técnica de un taller de reparación de laptops.
+Devuelve únicamente un objeto JSON que cumpla exactamente el esquema solicitado.
+
+Reglas obligatorias:
+- Genera como máximo 3 candidatos y nunca publiques ni guardes nada.
+- Usa sólo deliveredRepairEvidence y relatedKnowledgeDocuments recibidos.
+- reportedIssue es contexto aportado por el cliente, no evidencia técnica confirmada.
+- notes y measurements son registros técnicos separados; no los presentes como diagnóstico por sí solos.
+- Sólo confirmedDiagnosisEvents, confirmedRepairEvents, confirmedRepairDiagnosis y confirmedRepairSolution respaldan conclusiones para un candidato.
+- No recibes AI_SUGGESTION: nunca inventes, reconstruyas ni uses hipótesis de IA como evidencia.
+- sourceRepairIds contiene exclusivamente IDs de reparaciones que respaldan el candidato con evidencia confirmada.
+- Para operation update, usa como targetDocumentId un ID de relatedKnowledgeDocuments y conserva ese mismo valor en id.
+- Para operation new, usa targetDocumentId null y un id estable en minúsculas, números y guiones.
+- No repitas contenido ya cubierto. Propón una actualización cuando exista un documento relacionado y uno nuevo sólo si el tema no está cubierto.
+- El contenido debe distinguir síntoma, comprobaciones, diagnóstico confirmado y reparación comprobada. Evita generalizar a partir de un único caso.
+- Los candidatos quedan sujetos a edición y confirmación humana obligatoria.
 - No agregues claves fuera del esquema.`;
 
 const repairDraftTextFields = [
@@ -588,10 +634,175 @@ export class WebLLMLocalAIService implements LocalAIService {
   }
 
   async generateFinalReport(
-    _repair: Repair,
-    _events: RepairEvent[],
+    repair: Repair,
+    events: RepairEvent[],
   ): Promise<string> {
-    throw new Error("El informe final todavía no está disponible.");
+    if (this.generationInProgress) {
+      throw new Error("Ya hay una generación local en curso.");
+    }
+    this.generationInProgress = true;
+    const safeFallback = createSafeFinalReportText(repair, events);
+
+    try {
+      const engine = await this.ensureReady(this.snapshot.modelId);
+      this.update({
+        phase: "generating",
+        progress: 1,
+        progressText: "Preparando un borrador de informe local…",
+        error: null,
+        debugOutput: null,
+      });
+
+      try {
+        const response = await engine.chat.completions.create({
+          messages: [
+            { role: "system", content: finalReportSystemPrompt },
+            {
+              role: "user",
+              content: buildFinalReportRequestContent(repair, events),
+            },
+          ],
+          response_format: {
+            type: "json_object",
+            schema: JSON.stringify(finalReportJsonSchema),
+          },
+          temperature: 0,
+          top_p: 1,
+          max_tokens: 1_150,
+          seed: 42,
+        });
+        const choice = response.choices[0];
+        const content = choice?.message.content;
+        this.captureDebugOutput(
+          "final-report",
+          typeof content === "string" ? content : String(content ?? ""),
+          choice?.finish_reason ?? null,
+        );
+        if (choice?.finish_reason === "length") {
+          throw new Error("El modelo local devolvió un informe truncado.");
+        }
+        if (typeof content !== "string" || !content.trim()) {
+          throw new Error("El modelo local no devolvió un informe.");
+        }
+
+        const report = parseFinalReportResponse(content);
+        this.update({ phase: "ready", progressText: null, error: null, failure: null });
+        return formatFinalReport(report, repair);
+      } catch (reason) {
+        const isOutputError =
+          reason instanceof Error &&
+          (reason.message.startsWith("El modelo local devolvió") ||
+            reason.message.startsWith("El modelo local no devolvió"));
+
+        if (isOutputError) {
+          this.update({ phase: "ready", progressText: null, error: null, failure: null });
+          return safeFallback;
+        }
+
+        const failure = classifyLocalAIError(reason, this.snapshot.modelLabel);
+        // Any execution failure discards the worker so a later explicit retry
+        // starts from a clean engine instead of reusing a corrupted session.
+        await this.unloadEngine();
+        this.update({ phase: "error", progressText: null, error: failure.message, failure });
+        return safeFallback;
+      }
+    } catch {
+      // Compatibility and model-load errors are already reflected in the
+      // runtime snapshot. A deterministic report remains available for review.
+      return safeFallback;
+    } finally {
+      this.generationInProgress = false;
+    }
+  }
+
+  async generateKnowledgeProposals(
+    evidence: KnowledgeProposalRepairEvidence[],
+    knowledgeDocuments: KnowledgeDocument[],
+  ): Promise<KnowledgeProposalCandidate[]> {
+    if (evidence.length === 0) {
+      throw new Error("No hay reparaciones entregadas con evidencia confirmada para revisar.");
+    }
+    if (this.generationInProgress) {
+      throw new Error("Ya hay una generación local en curso.");
+    }
+    this.generationInProgress = true;
+    const repairIds = evidence.map(({ repairId }) => repairId);
+    const documentIds = knowledgeDocuments.map(({ id }) => id);
+
+    try {
+      const engine = await this.ensureReady(this.snapshot.modelId);
+      this.update({
+        phase: "generating",
+        progress: 1,
+        progressText: "Preparando candidatos documentales para revisión…",
+        error: null,
+        debugOutput: null,
+      });
+
+      try {
+        const response = await engine.chat.completions.create({
+          messages: [
+            { role: "system", content: knowledgeProposalSystemPrompt },
+            {
+              role: "user",
+              content: buildKnowledgeProposalRequestContent(
+                evidence,
+                knowledgeDocuments,
+              ),
+            },
+          ],
+          response_format: {
+            type: "json_object",
+            schema: JSON.stringify(
+              createKnowledgeProposalJsonSchema(repairIds, documentIds),
+            ),
+          },
+          temperature: 0,
+          top_p: 1,
+          max_tokens: 1_350,
+          seed: 42,
+        });
+        const choice = response.choices[0];
+        const content = choice?.message.content;
+        this.captureDebugOutput(
+          "knowledge-proposal",
+          typeof content === "string" ? content : String(content ?? ""),
+          choice?.finish_reason ?? null,
+        );
+        if (choice?.finish_reason === "length") {
+          throw new Error(
+            "El modelo local agotó el límite de respuesta. No se guardó ningún documento.",
+          );
+        }
+        if (typeof content !== "string" || !content.trim()) {
+          throw new Error("El modelo local no devolvió candidatos documentales.");
+        }
+        const candidates = parseKnowledgeProposalResponse(
+          content,
+          evidence,
+          knowledgeDocuments,
+        );
+        this.update({ phase: "ready", progressText: null, error: null, failure: null });
+        return candidates;
+      } catch (reason) {
+        const isOutputError =
+          reason instanceof Error &&
+          (reason.message.startsWith("El modelo local") ||
+            reason.message.startsWith("Los candidatos") ||
+            reason.message.startsWith("Un candidato"));
+        const failure = isOutputError
+          ? null
+          : classifyLocalAIError(reason, this.snapshot.modelLabel);
+        const message = isOutputError && reason instanceof Error
+          ? reason.message
+          : failure!.message;
+        if (failure?.blocksAI) this.terminateEngine();
+        this.update({ phase: "error", progressText: null, error: message, failure });
+        throw new Error(message);
+      }
+    } finally {
+      this.generationInProgress = false;
+    }
   }
 
   private async ensureReady(modelId: LocalAIModelId): Promise<MLCEngineInterface> {

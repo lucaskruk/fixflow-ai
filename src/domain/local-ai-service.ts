@@ -1,6 +1,8 @@
 import type {
   DiagnosticAnalysis,
   KnowledgeDocument,
+  KnowledgeProposalCandidate,
+  KnowledgeProposalRepairEvidence,
   Repair,
   RepairDraft,
   RepairEvent,
@@ -24,4 +26,9 @@ export interface LocalAIService {
     repair: Repair,
     events: RepairEvent[],
   ): Promise<string>;
+
+  generateKnowledgeProposals(
+    evidence: KnowledgeProposalRepairEvidence[],
+    knowledgeDocuments: KnowledgeDocument[],
+  ): Promise<KnowledgeProposalCandidate[]>;
 }

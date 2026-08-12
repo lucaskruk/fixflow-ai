@@ -1,10 +1,34 @@
 import { describe, expect, it } from "vitest";
-import type { Repair, RepairEvent } from "../domain/schemas";
+import type { KnowledgeDocument, Repair, RepairEvent } from "../domain/schemas";
 import {
   identifyKnowledgeTags,
-  knowledgeDocuments,
   retrieveKnowledgeDocuments,
 } from "./knowledge-base";
+
+const documentDefinitions = [
+  ["kb-no-power-sequence", ["no-power", "power-sequence", "input-power", "standby-rails"]],
+  ["kb-input-power-stage", ["input-power", "adapter", "dc-jack", "input-mosfet", "charger-ic"]],
+  ["kb-standby-rails", ["standby-rails", "3valw", "5valw", "enable", "no-power"]],
+  ["kb-battery-charging", ["battery-charging", "battery", "adapter", "charger-ic"]],
+  ["kb-no-image", ["no-image", "display", "external-display"]],
+  ["kb-storage-data-preservation", ["storage", "data-backup", "read-errors"]],
+  ["kb-hdd-mechanical-failure", ["hdd", "mechanical-noise", "clicking", "storage", "data-backup"]],
+  ["kb-windows-boot-recovery", ["windows-boot", "winre", "boot-loop"]],
+  ["kb-thermal-throttling", ["overheating", "thermal-throttling", "high-temperature", "shutdown-load", "performance-drop"]],
+  ["kb-cooling-system", ["fan", "airflow", "cooling", "overheating"]],
+  ["kb-display-cable-hinge", ["display-cable", "hinge", "flicker", "internal-display", "external-display"]],
+] as const;
+
+const documents: KnowledgeDocument[] = documentDefinitions.map(([id, tags]) => ({
+  id,
+  title: id,
+  tags: [...tags],
+  content: `Contenido de ${id}`,
+  sources: ["Referencia de prueba"],
+  status: "published",
+  createdAt: "2026-08-12T10:00:00.000Z",
+  updatedAt: "2026-08-12T10:00:00.000Z",
+}));
 
 const repair: Repair = {
   id: "FF-TEST-POWER",
@@ -33,32 +57,6 @@ const events: RepairEvent[] = [
 ];
 
 describe("local knowledge retrieval", () => {
-  it("contains the curated diagnostic topics", () => {
-    expect(knowledgeDocuments).toHaveLength(20);
-    expect(knowledgeDocuments.map((document) => document.id)).toEqual([
-      "kb-no-power-sequence",
-      "kb-input-power-stage",
-      "kb-standby-rails",
-      "kb-buck-converters",
-      "kb-short-to-ground",
-      "kb-battery-charging",
-      "kb-no-image",
-      "kb-bios-ec-basics",
-      "kb-storage-data-preservation",
-      "kb-hdd-mechanical-failure",
-      "kb-nvme-detection",
-      "kb-memory-isolation",
-      "kb-windows-boot-recovery",
-      "kb-windows-system-files",
-      "kb-thermal-throttling",
-      "kb-cooling-system",
-      "kb-usb-port-basics",
-      "kb-display-cable-hinge",
-      "kb-liquid-damage-input",
-      "kb-camera-detection",
-    ]);
-  });
-
   it("identifies tags deterministically from Spanish technical evidence", () => {
     const input = "No enciende. Resistencia a tierra de 2 ohm en la bobina de 5VALW.";
     expect(identifyKnowledgeTags(input)).toEqual(identifyKnowledgeTags(input));
@@ -72,7 +70,7 @@ describe("local knowledge retrieval", () => {
   });
 
   it("returns at most three documents ordered by matching tags", () => {
-    const retrieved = retrieveKnowledgeDocuments(repair, events, 99);
+    const retrieved = retrieveKnowledgeDocuments(documents, repair, events, 99);
     expect(retrieved).toHaveLength(3);
     expect(retrieved.map((document) => document.id)).toEqual([
       "kb-no-power-sequence",
@@ -86,7 +84,7 @@ describe("local knowledge retrieval", () => {
       ...repair,
       reportedIssue: "Enciende pero no da imagen en pantalla ni monitor externo.",
     };
-    const retrieved = retrieveKnowledgeDocuments(noImageRepair, []);
+    const retrieved = retrieveKnowledgeDocuments(documents, noImageRepair, []);
     expect(retrieved[0]?.id).toBe("kb-no-image");
     expect(retrieved.some((document) => document.id === "kb-battery-charging")).toBe(false);
   });
@@ -104,7 +102,7 @@ describe("local knowledge retrieval", () => {
       createdAt: "2026-08-12T10:10:00.000Z",
     };
 
-    expect(retrieveKnowledgeDocuments(unrelatedRepair, [priorSuggestion])).toEqual([]);
+    expect(retrieveKnowledgeDocuments(documents, unrelatedRepair, [priorSuggestion])).toEqual([]);
   });
 
   it("retrieves HDD safety guidance for clicks and missing Windows boot", () => {
@@ -115,7 +113,7 @@ describe("local knowledge retrieval", () => {
         "No inicia Windows, hace clics y silbidos propios del disco rígido.",
     };
 
-    expect(retrieveKnowledgeDocuments(hddRepair, []).map(({ id }) => id)).toEqual([
+    expect(retrieveKnowledgeDocuments(documents, hddRepair, []).map(({ id }) => id)).toEqual([
       "kb-hdd-mechanical-failure",
       "kb-storage-data-preservation",
       "kb-windows-boot-recovery",
@@ -139,7 +137,7 @@ describe("local knowledge retrieval", () => {
     };
 
     expect(
-      retrieveKnowledgeDocuments(thermalRepair, [thermalEvent]).map(({ id }) => id),
+      retrieveKnowledgeDocuments(documents, thermalRepair, [thermalEvent]).map(({ id }) => id),
     ).toEqual([
       "kb-thermal-throttling",
       "kb-cooling-system",
@@ -162,7 +160,20 @@ describe("local knowledge retrieval", () => {
     };
 
     expect(
-      retrieveKnowledgeDocuments(flickerRepair, [flickerEvent]).map(({ id }) => id),
+      retrieveKnowledgeDocuments(documents, flickerRepair, [flickerEvent]).map(({ id }) => id),
     ).toContain("kb-display-cable-hinge");
+  });
+
+  it("excludes drafts from diagnostic retrieval", () => {
+    const draft = documents.map((document) =>
+      document.id === "kb-no-power-sequence"
+        ? { ...document, status: "draft" as const }
+        : document,
+    );
+    expect(
+      retrieveKnowledgeDocuments(draft, repair, events).some(
+        (document) => document.id === "kb-no-power-sequence",
+      ),
+    ).toBe(false);
   });
 });

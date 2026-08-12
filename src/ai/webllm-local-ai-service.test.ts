@@ -16,7 +16,10 @@ vi.mock("@mlc-ai/web-llm", () => ({
 
 describe("WebLLM engine selection", () => {
   const workers: Array<{ terminate: ReturnType<typeof vi.fn> }> = [];
-  const engines: Array<{ unload: ReturnType<typeof vi.fn> }> = [];
+  const engines: Array<{
+    unload: ReturnType<typeof vi.fn>;
+    chat: { completions: { create: ReturnType<typeof vi.fn> } };
+  }> = [];
 
   beforeEach(() => {
     workers.length = 0;
@@ -89,5 +92,96 @@ describe("WebLLM engine selection", () => {
       expect.objectContaining({ cacheBackend: "cache" }),
     );
     expect(service.getSnapshot().cached).toBe(false);
+  });
+
+  it("generates the final report with the selected WebLLM model", async () => {
+    const completion = vi.fn().mockResolvedValue({
+      choices: [{
+        finish_reason: "stop",
+        message: { content: JSON.stringify({
+          reportedSymptom: "No enciende.",
+          testsAndMeasurements: ["Entrada de 20 V."],
+          observations: [],
+          confirmedDiagnosis: ["Jack dañado."],
+          repairPerformed: ["Jack reemplazado."],
+          finalStatus: "Listo para entregar",
+          recommendations: ["Usar el cargador probado."],
+        }) },
+      }],
+    });
+    webllmMocks.createEngine.mockImplementationOnce(async () => {
+      const engine = {
+        unload: vi.fn().mockResolvedValue(undefined),
+        chat: { completions: { create: completion } },
+      };
+      engines.push(engine);
+      return engine;
+    });
+    const service = new WebLLMLocalAIService();
+    const report = await service.generateFinalReport({
+      id: "REP-1",
+      customerName: "Ana",
+      customerPhone: null,
+      brand: "Lenovo",
+      model: "T14",
+      serialNumber: null,
+      reportedIssue: "No enciende.",
+      accessories: [],
+      status: "READY",
+      diagnosis: "Jack dañado.",
+      solution: "Jack reemplazado.",
+      createdAt: "2026-08-10T10:00:00.000Z",
+      updatedAt: "2026-08-12T10:00:00.000Z",
+    }, [{
+      id: "evt-ai",
+      repairId: "REP-1",
+      type: "AI_SUGGESTION",
+      content: "Placa madre defectuosa.",
+      createdAt: "2026-08-12T09:00:00.000Z",
+    }]);
+
+    expect(report).toContain("DIAGNÓSTICO CONFIRMADO\n- Jack dañado.");
+    expect(webllmMocks.createEngine).toHaveBeenCalledWith(
+      expect.anything(),
+      "Qwen2.5-0.5B-Instruct-q4f16_1-MLC",
+      expect.anything(),
+      expect.anything(),
+    );
+    const request = completion.mock.calls[0]![0];
+    expect(request.messages[1].content).not.toContain("Placa madre defectuosa");
+    expect(request.response_format.schema).toContain("confirmedDiagnosis");
+  });
+
+  it("falls back to a deterministic report when model output is invalid", async () => {
+    webllmMocks.createEngine.mockImplementationOnce(async () => {
+      const engine = {
+        unload: vi.fn().mockResolvedValue(undefined),
+        chat: { completions: { create: vi.fn().mockResolvedValue({
+          choices: [{ finish_reason: "stop", message: { content: "not-json" } }],
+        }) } },
+      };
+      engines.push(engine);
+      return engine;
+    });
+    const service = new WebLLMLocalAIService();
+    const report = await service.generateFinalReport({
+      id: "REP-2",
+      customerName: "Luis",
+      customerPhone: null,
+      brand: "Dell",
+      model: "Latitude",
+      serialNumber: null,
+      reportedIssue: "Se apaga.",
+      accessories: [],
+      status: "DIAGNOSING",
+      diagnosis: null,
+      solution: null,
+      createdAt: "2026-08-10T10:00:00.000Z",
+      updatedAt: "2026-08-12T10:00:00.000Z",
+    }, []);
+
+    expect(report).toContain("SÍNTOMA INFORMADO\nSe apaga.");
+    expect(report).toContain("No hay un diagnóstico confirmado registrado.");
+    expect(service.getSnapshot().phase).toBe("ready");
   });
 });

@@ -27,11 +27,15 @@ export const technicianRepairEventTypes = [
 ] as const;
 
 export const confidenceLevels = ["low", "medium", "high"] as const;
+export const knowledgeDocumentStatuses = ["draft", "published"] as const;
+export const knowledgeProposalOperations = ["new", "update"] as const;
 
 export const repairStatusSchema = z.enum(repairStatuses);
 export const repairEventTypeSchema = z.enum(repairEventTypes);
 export const technicianRepairEventTypeSchema = z.enum(technicianRepairEventTypes);
 export const confidenceSchema = z.enum(confidenceLevels);
+export const knowledgeDocumentStatusSchema = z.enum(knowledgeDocumentStatuses);
+export const knowledgeProposalOperationSchema = z.enum(knowledgeProposalOperations);
 
 export const repairDraftSchema = z
   .object({
@@ -118,10 +122,90 @@ export const createAISuggestionEventInputSchema = z.object({
 }).strict();
 
 export const knowledgeDocumentSchema = z.object({
-  id: requiredText,
+  id: z.string().trim().min(1).max(100).regex(
+    /^[a-z0-9]+(?:-[a-z0-9]+)*$/,
+    "Use only lowercase letters, numbers and hyphens",
+  ),
   title: requiredText,
   tags: z.array(requiredText).min(1),
   content: requiredText,
+  sources: z.array(requiredText).min(1),
+  status: knowledgeDocumentStatusSchema,
+  createdAt: z.iso.datetime(),
+  updatedAt: z.iso.datetime(),
+}).strict();
+
+export const createKnowledgeDocumentInputSchema = knowledgeDocumentSchema.pick({
+  id: true,
+  title: true,
+  tags: true,
+  content: true,
+  sources: true,
+  status: true,
+}).extend({
+  status: knowledgeDocumentStatusSchema.optional().default("draft"),
+}).strict();
+
+export const updateKnowledgeDocumentInputSchema = knowledgeDocumentSchema
+  .pick({
+    title: true,
+    tags: true,
+    content: true,
+    sources: true,
+    status: true,
+  })
+  .partial()
+  .refine((value) => Object.keys(value).length > 0, {
+    message: "At least one field is required",
+  });
+
+export const listKnowledgeDocumentsInputSchema = z.object({
+  q: z.string().trim().max(200).optional(),
+  tag: z.string().trim().min(1).max(100).optional(),
+  status: knowledgeDocumentStatusSchema.optional(),
+}).strict();
+
+export const knowledgeProposalCandidateSchema = z.object({
+  operation: knowledgeProposalOperationSchema,
+  targetDocumentId: z.string().trim().min(1).max(100).nullable(),
+  id: z.string().trim().min(1).max(100).regex(
+    /^[a-z0-9]+(?:-[a-z0-9]+)*$/,
+    "Use only lowercase letters, numbers and hyphens",
+  ),
+  title: requiredText.max(180),
+  tags: z.array(requiredText.max(100)).min(1).max(12),
+  content: requiredText.max(6_000),
+  sourceRepairIds: z.array(requiredText.max(100)).min(1).max(8),
+}).strict().superRefine((candidate, context) => {
+  if (candidate.operation === "new" && candidate.targetDocumentId !== null) {
+    context.addIssue({
+      code: "custom",
+      path: ["targetDocumentId"],
+      message: "A new document cannot have a target document",
+    });
+  }
+  if (candidate.operation === "update" && candidate.targetDocumentId === null) {
+    context.addIssue({
+      code: "custom",
+      path: ["targetDocumentId"],
+      message: "An update requires a target document",
+    });
+  }
+  if (
+    candidate.operation === "update" &&
+    candidate.targetDocumentId !== null &&
+    candidate.id !== candidate.targetDocumentId
+  ) {
+    context.addIssue({
+      code: "custom",
+      path: ["id"],
+      message: "An update must keep the target document ID",
+    });
+  }
+});
+
+export const knowledgeProposalResponseSchema = z.object({
+  candidates: z.array(knowledgeProposalCandidateSchema).max(3),
 }).strict();
 
 export const diagnosticHypothesisSchema = z.object({
@@ -166,6 +250,39 @@ export type CreateTechnicianRepairEventInput = z.infer<
   typeof createTechnicianRepairEventInputSchema
 >;
 export type KnowledgeDocument = z.infer<typeof knowledgeDocumentSchema>;
+export type KnowledgeDocumentStatus = z.infer<
+  typeof knowledgeDocumentStatusSchema
+>;
+export type CreateKnowledgeDocumentInput = z.infer<
+  typeof createKnowledgeDocumentInputSchema
+>;
+export type UpdateKnowledgeDocumentInput = z.infer<
+  typeof updateKnowledgeDocumentInputSchema
+>;
+export type ListKnowledgeDocumentsInput = z.infer<
+  typeof listKnowledgeDocumentsInputSchema
+>;
+export type KnowledgeProposalOperation = z.infer<
+  typeof knowledgeProposalOperationSchema
+>;
+export type KnowledgeProposalCandidate = z.infer<
+  typeof knowledgeProposalCandidateSchema
+>;
+export type KnowledgeProposalResponse = z.infer<
+  typeof knowledgeProposalResponseSchema
+>;
+export type KnowledgeProposalRepairEvidence = {
+  repairId: string;
+  brand: string;
+  model: string;
+  reportedIssue: string;
+  notes: string[];
+  measurements: string[];
+  confirmedDiagnosisEvents: string[];
+  confirmedRepairEvents: string[];
+  confirmedRepairDiagnosis: string | null;
+  confirmedRepairSolution: string | null;
+};
 export type DiagnosticAnalysis = z.infer<typeof diagnosticAnalysisSchema>;
 export type DiagnosticAnalysisEventContent = z.infer<
   typeof diagnosticAnalysisEventContentSchema

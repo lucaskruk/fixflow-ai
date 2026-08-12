@@ -1,16 +1,23 @@
-import { type FormEvent, useEffect, useState } from "react";
+import { type FormEvent, useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useParams } from "react-router-dom";
 import { parseDiagnosticAnalysisEvent, serializeDiagnosticAnalysis } from "../ai/diagnostic-analysis";
-import { getKnowledgeDocument, retrieveKnowledgeDocuments } from "../ai/knowledge-base";
+import { retrieveKnowledgeDocuments } from "../ai/knowledge-base";
 import { localAIService, useLocalAIStatus } from "../ai/local-ai";
+import { knowledgeApi } from "../api/knowledge";
 import { ApiError, repairsApi } from "../api/repairs";
 import { AppShell } from "../components/AppShell";
+import { FinalReportDraft } from "../components/FinalReportDraft";
+import {
+  KnowledgeCitationList,
+  KnowledgeRetrievalPreview,
+} from "../components/KnowledgeRetrievalPreview";
 import { LocalAIDebugPanel } from "../components/LocalAIDebugPanel";
 import { LocalAIUnavailableNotice } from "../components/LocalAIUnavailableNotice";
 import { StatePanel } from "../components/StatePanel";
 import { StatusBadge } from "../components/StatusBadge";
 import {
   repairStatuses,
+  type KnowledgeDocument,
   type Repair,
   type RepairEvent,
   type RepairStatus,
@@ -26,7 +33,13 @@ import {
 
 type LocationState = { notice?: string } | null;
 
-function AISuggestion({ event }: { event: RepairEvent }) {
+function AISuggestion({
+  event,
+  knowledgeDocuments,
+}: {
+  event: RepairEvent;
+  knowledgeDocuments: readonly KnowledgeDocument[];
+}) {
   const analysis = parseDiagnosticAnalysisEvent(event.content);
   if (!analysis) return <p>{event.content}</p>;
 
@@ -69,21 +82,10 @@ function AISuggestion({ event }: { event: RepairEvent }) {
           </ul>
         </section>
       )}
-      <section className="diagnostic-analysis__sources">
-        <h3>Fuentes técnicas locales</h3>
-        {analysis.sources.length > 0 ? (
-          <ul>
-            {analysis.sources.map((sourceId) => (
-              <li key={sourceId}>
-                <span>{getKnowledgeDocument(sourceId)?.title ?? sourceId}</span>
-                <code>{sourceId}</code>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p>Este análisis no citó documentos de la base local.</p>
-        )}
-      </section>
+      <KnowledgeCitationList
+        sourceIds={analysis.sources}
+        documents={knowledgeDocuments}
+      />
     </div>
   );
 }
@@ -95,6 +97,7 @@ export function RepairDetail() {
   const initialNotice = (location.state as LocationState)?.notice;
   const [repair, setRepair] = useState<Repair | null>(null);
   const [events, setEvents] = useState<RepairEvent[]>([]);
+  const [knowledgeDocuments, setKnowledgeDocuments] = useState<KnowledgeDocument[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [notFound, setNotFound] = useState(false);
@@ -110,6 +113,15 @@ export function RepairDetail() {
   const [analysisBusy, setAnalysisBusy] = useState(false);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
   const [analysisMessage, setAnalysisMessage] = useState<string | null>(null);
+  const [retrievalRefreshing, setRetrievalRefreshing] = useState(false);
+  const [retrievalError, setRetrievalError] = useState<string | null>(null);
+  const [retrievalMessage, setRetrievalMessage] = useState<string | null>(null);
+  const retrievedKnowledgeDocuments = useMemo(
+    () => repair
+      ? retrieveKnowledgeDocuments(knowledgeDocuments, repair, events)
+      : [],
+    [events, knowledgeDocuments, repair],
+  );
   const aiBlocked =
     aiStatus.phase === "unsupported" ||
     Boolean(aiStatus.failure?.blocksAI);
@@ -126,10 +138,12 @@ export function RepairDetail() {
     Promise.all([
       repairsApi.get(id, controller.signal),
       repairsApi.listEvents(id, controller.signal),
-    ]).then(([loadedRepair, loadedEvents]) => {
+      knowledgeApi.list({}, controller.signal),
+    ]).then(([loadedRepair, loadedEvents, loadedKnowledgeDocuments]) => {
       setRepair(loadedRepair);
       setStatusDraft(loadedRepair.status);
       setEvents(loadedEvents);
+      setKnowledgeDocuments(loadedKnowledgeDocuments);
     }).catch((reason: unknown) => {
       if (controller.signal.aborted) return;
       if (reason instanceof ApiError && reason.status === 404) setNotFound(true);
@@ -184,11 +198,10 @@ export function RepairDetail() {
     setAnalysisMessage(null);
 
     try {
-      const documents = retrieveKnowledgeDocuments(repair, events);
       const analysis = await localAIService.analyzeDiagnosis(
         repair,
         events,
-        documents,
+        retrievedKnowledgeDocuments,
       );
       const created = await repairsApi.addAISuggestion(repair.id, {
         content: serializeDiagnosticAnalysis(analysis),
@@ -207,6 +220,26 @@ export function RepairDetail() {
       );
     } finally {
       setAnalysisBusy(false);
+    }
+  }
+
+  async function refreshKnowledgeRetrieval() {
+    if (retrievalRefreshing) return;
+    setRetrievalRefreshing(true);
+    setRetrievalError(null);
+    setRetrievalMessage(null);
+    try {
+      const loadedKnowledgeDocuments = await knowledgeApi.list({});
+      setKnowledgeDocuments(loadedKnowledgeDocuments);
+      setRetrievalMessage("Selección actualizada con la base local vigente.");
+    } catch (reason) {
+      setRetrievalError(
+        reason instanceof Error
+          ? reason.message
+          : "No pudimos actualizar la selección de documentos.",
+      );
+    } finally {
+      setRetrievalRefreshing(false);
     }
   }
 
@@ -287,6 +320,8 @@ export function RepairDetail() {
               </section>
             )}
 
+            <FinalReportDraft repair={repair} events={events} />
+
             <section className="panel timeline-panel">
               <div className="section-heading">
                 <div>
@@ -310,7 +345,12 @@ export function RepairDetail() {
                         {event.type === "AI_SUGGESTION" && (
                           <p className="hypothesis-warning">Hipótesis generada por IA · No es un diagnóstico confirmado</p>
                         )}
-                        {event.type === "AI_SUGGESTION" ? <AISuggestion event={event} /> : <p>{event.content}</p>}
+                        {event.type === "AI_SUGGESTION" ? (
+                          <AISuggestion
+                            event={event}
+                            knowledgeDocuments={knowledgeDocuments}
+                          />
+                        ) : <p>{event.content}</p>}
                       </div>
                     </li>
                   ))}
@@ -378,6 +418,13 @@ export function RepairDetail() {
                 {eventSubmitting ? "Guardando…" : "Agregar al historial"}
               </button>
               <div className="ai-action-placeholder">
+                <KnowledgeRetrievalPreview
+                  documents={retrievedKnowledgeDocuments}
+                  onRefresh={() => void refreshKnowledgeRetrieval()}
+                  refreshing={retrievalRefreshing}
+                  error={retrievalError}
+                  message={retrievalMessage}
+                />
                 <button
                   className="button button--ai button--full"
                   type="button"

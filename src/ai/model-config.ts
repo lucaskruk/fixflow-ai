@@ -167,3 +167,63 @@ export function createDiagnosticAnalysisJsonSchema(
     },
   } as const;
 }
+
+export function createKnowledgeProposalJsonSchema(
+  repairIds: readonly string[],
+  documentIds: readonly string[],
+) {
+  const targetDocumentId = documentIds.length > 0
+    ? { enum: [null, ...documentIds] }
+    : { type: "null" };
+
+  return {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      candidates: {
+        type: "array",
+        maxItems: 3,
+        items: {
+          type: "object",
+          additionalProperties: false,
+          properties: {
+            operation: { enum: ["new", "update"] },
+            targetDocumentId,
+            id: {
+              type: "string",
+              minLength: 1,
+              maxLength: 100,
+              pattern: "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+            },
+            title: { type: "string", minLength: 1, maxLength: 180 },
+            tags: {
+              type: "array",
+              minItems: 1,
+              maxItems: 12,
+              uniqueItems: true,
+              items: { type: "string", minLength: 1, maxLength: 100 },
+            },
+            content: { type: "string", minLength: 1, maxLength: 6_000 },
+            sourceRepairIds: {
+              type: "array",
+              minItems: 1,
+              maxItems: Math.max(1, repairIds.length),
+              uniqueItems: true,
+              items: { type: "string", enum: [...repairIds] },
+            },
+          },
+          required: [
+            "operation",
+            "targetDocumentId",
+            "id",
+            "title",
+            "tags",
+            "content",
+            "sourceRepairIds",
+          ],
+        },
+      },
+    },
+    required: ["candidates"],
+  } as const;
+}

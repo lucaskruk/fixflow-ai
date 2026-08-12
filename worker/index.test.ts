@@ -136,3 +136,91 @@ describe("repairs API", () => {
     });
   });
 });
+
+describe("knowledge API", () => {
+  it("lists, reads and filters the curated D1 documents", async () => {
+    const listResponse = await api.fetch("https://example.test/api/knowledge");
+    expect(listResponse.status).toBe(200);
+    const list = (await listResponse.json()) as { data: { id: string }[] };
+    expect(list.data).toHaveLength(20);
+
+    const filteredResponse = await api.fetch(
+      "https://example.test/api/knowledge?tag=no-power&status=published",
+    );
+    expect(filteredResponse.status).toBe(200);
+    const filtered = (await filteredResponse.json()) as {
+      data: { id: string; tags: string[]; status: string }[];
+    };
+    expect(filtered.data.length).toBeGreaterThan(0);
+    expect(filtered.data.every(({ tags }) => tags.includes("no-power"))).toBe(true);
+
+    const getResponse = await api.fetch(
+      "https://example.test/api/knowledge/kb-no-power-sequence",
+    );
+    expect(getResponse.status).toBe(200);
+    await expect(getResponse.json()).resolves.toMatchObject({
+      data: { id: "kb-no-power-sequence", status: "published" },
+    });
+  });
+
+  it("validates and supports the complete knowledge lifecycle", async () => {
+    const invalid = await api.fetch("https://example.test/api/knowledge", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ id: "Invalid ID", title: "Sin contenido" }),
+    });
+    expect(invalid.status).toBe(400);
+
+    const createResponse = await api.fetch("https://example.test/api/knowledge", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        id: "kb-api-lifecycle-test",
+        title: "Prueba API Knowledge",
+        tags: ["api-test"],
+        content: "Contenido técnico validado.",
+        sources: ["Referencia de prueba"],
+      }),
+    });
+    expect(createResponse.status).toBe(201);
+    await expect(createResponse.json()).resolves.toMatchObject({
+      data: { id: "kb-api-lifecycle-test", status: "draft" },
+    });
+
+    const conflict = await api.fetch("https://example.test/api/knowledge", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        id: "kb-api-lifecycle-test",
+        title: "Duplicado",
+        tags: ["api-test"],
+        content: "No debe crearse.",
+        sources: ["Referencia"],
+      }),
+    });
+    expect(conflict.status).toBe(409);
+
+    const updateResponse = await api.fetch(
+      "https://example.test/api/knowledge/kb-api-lifecycle-test",
+      {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ status: "published", tags: ["api-test", "reviewed"] }),
+      },
+    );
+    expect(updateResponse.status).toBe(200);
+    await expect(updateResponse.json()).resolves.toMatchObject({
+      data: { status: "published", tags: ["api-test", "reviewed"] },
+    });
+
+    const deleteResponse = await api.fetch(
+      "https://example.test/api/knowledge/kb-api-lifecycle-test",
+      { method: "DELETE" },
+    );
+    expect(deleteResponse.status).toBe(204);
+    const missing = await api.fetch(
+      "https://example.test/api/knowledge/kb-api-lifecycle-test",
+    );
+    expect(missing.status).toBe(404);
+  });
+});

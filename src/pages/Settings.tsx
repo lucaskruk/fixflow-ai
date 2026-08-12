@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { localAIService, useLocalAIStatus } from "../ai/local-ai";
 import {
   getLocalAIModel,
@@ -105,6 +106,20 @@ export function Settings() {
             <p>Elegí el modelo que se usará tanto para extraer ingresos como para analizar diagnósticos.</p>
           </div>
         </header>
+
+        <section className="panel settings-knowledge" aria-labelledby="settings-knowledge-heading">
+          <div>
+            <p className="section-kicker">Documentación técnica</p>
+            <h2 id="settings-knowledge-heading">Base Knowledge administrable</h2>
+            <p>
+              Revisá fuentes, editá tags y publicá sólo los documentos que pueden
+              participar en nuevos análisis.
+            </p>
+          </div>
+          <Link className="button button--secondary" to="/knowledge">
+            Administrar Knowledge
+          </Link>
+        </section>
 
         <section className="panel settings-runtime" aria-labelledby="local-ai-heading">
           <div className="settings-runtime__copy">

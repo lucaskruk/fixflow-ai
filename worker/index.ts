@@ -4,19 +4,27 @@ import {
   createAISuggestionEventInputSchema,
   createRepairInputSchema,
   createTechnicianRepairEventInputSchema,
+  createKnowledgeDocumentInputSchema,
+  listKnowledgeDocumentsInputSchema,
   updateRepairInputSchema,
+  updateKnowledgeDocumentInputSchema,
 } from "../src/domain/schemas";
+import { KnowledgeRepository } from "./knowledge-repository";
 import { RepairRepository } from "./repair-repository";
 
 export interface Env {
   DB: D1Database;
 }
 
-type Variables = { repository: RepairRepository };
+type Variables = {
+  repository: RepairRepository;
+  knowledgeRepository: KnowledgeRepository;
+};
 const app = new Hono<{ Bindings: Env; Variables: Variables }>();
 
 app.use("/api/*", async (context, next) => {
   context.set("repository", new RepairRepository(context.env.DB));
+  context.set("knowledgeRepository", new KnowledgeRepository(context.env.DB));
   await next();
 });
 
@@ -84,6 +92,61 @@ app.post("/api/repairs/:id/events/ai-suggestions", async (context) => {
   return event
     ? context.json({ data: event }, 201)
     : context.json({ error: { code: "NOT_FOUND", message: "Repair not found" } }, 404);
+});
+
+app.get("/api/knowledge", async (context) => {
+  const filters = listKnowledgeDocumentsInputSchema.parse({
+    q: context.req.query("q"),
+    tag: context.req.query("tag"),
+    status: context.req.query("status"),
+  });
+  return context.json({ data: await context.var.knowledgeRepository.list(filters) });
+});
+
+app.post("/api/knowledge", async (context) => {
+  const input = createKnowledgeDocumentInputSchema.parse(await context.req.json());
+  if (await context.var.knowledgeRepository.get(input.id)) {
+    return context.json(
+      { error: { code: "CONFLICT", message: "Knowledge document already exists" } },
+      409,
+    );
+  }
+  const document = await context.var.knowledgeRepository.create(input);
+  return context.json({ data: document }, 201);
+});
+
+app.get("/api/knowledge/:id", async (context) => {
+  const document = await context.var.knowledgeRepository.get(context.req.param("id"));
+  return document
+    ? context.json({ data: document })
+    : context.json(
+        { error: { code: "NOT_FOUND", message: "Knowledge document not found" } },
+        404,
+      );
+});
+
+app.patch("/api/knowledge/:id", async (context) => {
+  const input = updateKnowledgeDocumentInputSchema.parse(await context.req.json());
+  const document = await context.var.knowledgeRepository.update(
+    context.req.param("id"),
+    input,
+  );
+  return document
+    ? context.json({ data: document })
+    : context.json(
+        { error: { code: "NOT_FOUND", message: "Knowledge document not found" } },
+        404,
+      );
+});
+
+app.delete("/api/knowledge/:id", async (context) => {
+  const deleted = await context.var.knowledgeRepository.delete(context.req.param("id"));
+  return deleted
+    ? context.body(null, 204)
+    : context.json(
+        { error: { code: "NOT_FOUND", message: "Knowledge document not found" } },
+        404,
+      );
 });
 
 app.notFound((context) =>

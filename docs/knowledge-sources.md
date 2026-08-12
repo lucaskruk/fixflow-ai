@@ -4,6 +4,19 @@ Los documentos de FixFlow son resúmenes operativos y conservadores para orienta
 el próximo paso. No reemplazan el manual de servicio, esquema o documentación del
 fabricante de cada equipo. Cada análisis recibe como máximo tres documentos.
 
+## Persistencia y revisión
+
+Los 20 documentos iniciales se preservan en D1 mediante la migración no
+destructiva `0003_knowledge_documents.sql`. La sección **Knowledge** permite
+buscar, filtrar por tag, crear, editar y eliminar documentos. Cada registro
+conserva ID estable, tags, contenido, fuentes, estado y timestamps.
+
+El estado `draft` permite revisión humana sin afectar análisis. El retrieval
+considera exclusivamente documentos `published`, mantiene el orden determinista
+por cantidad de tags coincidentes y limita la salida a tres documentos. Las
+hipótesis `AI_SUGGESTION` no aportan evidencia al retrieval. Al eliminar una
+fuente, los análisis previos conservan el ID citado dentro de su evento histórico.
+
 ## Arranque y reparación de Windows
 
 - [Windows Startup Repair](https://support.microsoft.com/en-us/windows/experience/startup-boot/startup-repair)
