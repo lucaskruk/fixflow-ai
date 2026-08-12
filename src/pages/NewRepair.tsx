@@ -3,6 +3,8 @@ import { Link, useNavigate } from "react-router-dom";
 import { localAIService, useLocalAIStatus } from "../ai/local-ai";
 import { repairsApi } from "../api/repairs";
 import { AppShell } from "../components/AppShell";
+import { LocalAIDebugPanel } from "../components/LocalAIDebugPanel";
+import { LocalAIUnavailableNotice } from "../components/LocalAIUnavailableNotice";
 import { repairStatuses, type RepairStatus } from "../domain/schemas";
 import { statusLabels } from "../ui/repair-display";
 
@@ -37,6 +39,9 @@ export function NewRepair() {
   const [confirmationMode, setConfirmationMode] = useState<"manual" | "ai">("manual");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const aiBlocked =
+    aiStatus.phase === "unsupported" ||
+    Boolean(aiStatus.failure?.blocksAI);
 
   useEffect(() => {
     void localAIService.probeCompatibility();
@@ -75,9 +80,11 @@ export function NewRepair() {
       );
     } catch (reason) {
       setError(
-        reason instanceof Error
-          ? reason.message
-          : "No pudimos procesar el ingreso localmente.",
+        localAIService.getSnapshot().failure
+          ? null
+          : reason instanceof Error
+            ? reason.message
+            : "No pudimos procesar el ingreso localmente.",
       );
     }
   }
@@ -147,7 +154,7 @@ export function NewRepair() {
                     aiStatus.phase === "loading" ? "Cargando" :
                     aiStatus.phase === "generating" ? "Procesando" :
                     aiStatus.phase === "ready" ? "Listo" :
-                    aiStatus.phase === "error" ? "Con error" : "Local"}
+                    aiStatus.phase === "error" ? (aiBlocked ? "No disponible" : "Con error") : "Local"}
                 </span>
               </div>
               {aiStatus.phase === "loading" && (
@@ -163,17 +170,18 @@ export function NewRepair() {
               {aiStatus.compatibility?.supported && aiStatus.compatibility.adapterLabel && (
                 <small>GPU: {aiStatus.compatibility.adapterLabel}</small>
               )}
-              {(aiStatus.phase === "unsupported" || aiStatus.phase === "error") && aiStatus.error && (
-                <div className="webgpu-warning" role="alert"><strong>IA local no disponible</strong><span>{aiStatus.error}</span></div>
-              )}
+              {aiStatus.failure && <LocalAIUnavailableNotice failure={aiStatus.failure} />}
               {(aiStatus.phase === "idle" || aiStatus.phase === "ready") && (
                 <p>{aiStatus.phase === "ready" ? "Modelo cargado y almacenado en la caché del navegador." : "La primera ejecución descargará el modelo; las siguientes usarán la caché."}</p>
               )}
             </section>
             {error && <div className="notice notice--error" role="alert">{error}</div>}
+            {error && aiStatus.debugOutput?.task === "repair-extraction" && (
+              <LocalAIDebugPanel output={aiStatus.debugOutput} />
+            )}
             <div className="form-actions form-actions--split">
-              <button className="button button--ai" type="button" onClick={processWithAI} disabled={!intakeText.trim() || aiStatus.phase === "checking" || aiStatus.phase === "unsupported" || aiStatus.phase === "loading" || aiStatus.phase === "generating"}>
-                <span aria-hidden="true">✦</span> {aiStatus.phase === "loading" ? "Cargando modelo…" : aiStatus.phase === "generating" ? "Procesando…" : "Procesar con IA"}
+              <button className="button button--ai" type="button" onClick={processWithAI} disabled={!intakeText.trim() || aiBlocked || aiStatus.phase === "checking" || aiStatus.phase === "loading" || aiStatus.phase === "generating"}>
+                <span aria-hidden="true">✦</span> {aiStatus.phase === "loading" ? "Cargando modelo…" : aiStatus.phase === "generating" ? "Procesando…" : aiBlocked ? "IA no disponible" : "Procesar con IA"}
               </button>
               <button className="button button--secondary" type="button" onClick={continueManually}>
                 Continuar manualmente <span aria-hidden="true">→</span>

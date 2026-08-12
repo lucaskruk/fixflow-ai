@@ -61,6 +61,90 @@ export const knowledgeDocuments: readonly KnowledgeDocument[] = [
     content:
       "El EC participa en botón de encendido, detección de adaptador/batería y secuencias; la BIOS contiene firmware de arranque. Antes de atribuir la falla al firmware, confirmar alimentaciones de espera, reset, reloj y actividad del bus SPI cuando sea posible. Guardar un respaldo verificado antes de programar y usar una imagen exacta para placa y revisión. Una reprogramación exitosa no demuestra que BIOS fuera la causa. Registrar versión, origen del archivo y resultado de la prueba.",
   },
+  {
+    id: "kb-storage-data-preservation",
+    title: "Almacenamiento inestable y preservación de datos",
+    tags: ["storage", "data-backup", "smart", "filesystem", "read-errors"],
+    content:
+      "Ante lentitud extrema, errores de lectura, desapariciones o ruidos anómalos, priorizar la copia de datos autorizada antes de pruebas intensivas. Registrar modelo, interfaz, detección en BIOS y sistema, estado SMART y errores observados. Un filesystem dañado puede ser consecuencia y no causa primaria. No ejecutar escrituras, reparaciones repetidas ni pruebas de superficie sobre una unidad con signos físicos de falla antes de acordar el riesgo sobre los datos.",
+  },
+  {
+    id: "kb-hdd-mechanical-failure",
+    title: "HDD con clics, silbidos o fallas mecánicas",
+    tags: ["hdd", "mechanical-noise", "clicking", "storage", "data-backup"],
+    content:
+      "Clics repetitivos, intentos de giro o silbidos acompañados de lentitud y errores de lectura son señales de riesgo mecánico, pero el sonido por sí solo no identifica la pieza defectuosa. Evitar ciclos de encendido innecesarios y no abrir la unidad fuera de un entorno especializado. Confirmar si BIOS la detecta de forma estable y registrar comportamiento sin insistir. Si los datos son importantes, detener pruebas invasivas y escalar a recuperación profesional.",
+  },
+  {
+    id: "kb-nvme-detection",
+    title: "SSD y NVMe no detectados o intermitentes",
+    tags: ["ssd", "nvme", "storage-detection", "bios-storage", "pcie-storage"],
+    content:
+      "Separar detección física en BIOS/UEFI de visibilidad dentro del sistema operativo. Apagar y desconectar antes de reinstalar el módulo; revisar fijación, conector y compatibilidad de interfaz. Probar en otro puerto o adaptador compatible cuando sea seguro. Una unidad visible en BIOS pero ausente en Windows orienta a particionado, controlador o configuración; una desaparición también en BIOS requiere priorizar conexión, firmware de plataforma, alimentación y la propia unidad.",
+  },
+  {
+    id: "kb-memory-isolation",
+    title: "Aislamiento de fallas de RAM y ranuras",
+    tags: ["ram", "memory-test", "memory-module", "memory-slot", "post", "bsod"],
+    content:
+      "Para reinicios, congelamientos, errores variables o ausencia de POST tras ampliar memoria, volver primero a la configuración conocida. Probar cada módulo por separado y luego cada ranura, manteniendo constantes las demás variables. Registrar ciclos completados y errores; una prueba rápida aprobada no descarta una falla intermitente. Verificar compatibilidad, asentamiento y parámetros de memoria. No atribuir automáticamente todos los pantallazos azules a RAM sin aislar módulo y ranura.",
+  },
+  {
+    id: "kb-windows-boot-recovery",
+    title: "Windows no inicia y entorno WinRE",
+    tags: ["windows-boot", "winre", "startup-repair", "boot-loop", "bcd", "update"],
+    content:
+      "Confirmar primero que BIOS detecte la unidad y conservar datos importantes. WinRE ofrece Reparación de inicio, desinstalación de actualizaciones, Restaurar sistema y opciones de arranque. Registrar qué herramienta se ejecutó y su resultado; repetir Reparación de inicio sin nueva evidencia aporta poco. Si BitLocker está activo, solicitar la clave legítima. Separar corrupción de arranque de una unidad inestable mediante diagnóstico de almacenamiento y eventos registrados.",
+  },
+  {
+    id: "kb-windows-system-files",
+    title: "Corrupción de archivos de sistema y filesystem",
+    tags: ["windows-corruption", "dism", "sfc", "chkdsk", "filesystem", "slow-boot"],
+    content:
+      "DISM repara la imagen de Windows y SFC verifica archivos protegidos; registrar comandos y resultados completos. CHKDSK comprueba metadatos del filesystem, pero corregir errores implica escrituras y no sustituye un diagnóstico físico de la unidad. Antes de reparar, revisar salud del almacenamiento y respaldar datos cuando haya síntomas de hardware. Una corrupción reparable no demuestra por sí sola que el disco esté sano ni defectuoso.",
+  },
+  {
+    id: "kb-thermal-throttling",
+    title: "Temperatura alta, throttling y apagado térmico",
+    tags: ["overheating", "thermal-throttling", "high-temperature", "shutdown-load", "performance-drop"],
+    content:
+      "Registrar temperatura, frecuencia, carga y tiempo hasta la caída de rendimiento o apagado. El throttling reduce frecuencia como protección y un apagado puede ocurrir si no alcanza para controlar la temperatura. Comparar con límites y comportamiento definidos por el OEM. No concluir pasta térmica seca sólo por una temperatura alta: comprobar ventiladores, flujo de aire, disipador, sensores, consumo y montaje antes de intervenir.",
+  },
+  {
+    id: "kb-cooling-system",
+    title: "Ventiladores, disipador y flujo de aire",
+    tags: ["fan", "airflow", "dust", "cooling", "mechanical-noise", "overheating"],
+    content:
+      "Inspeccionar entradas y salidas de aire, acumulación de polvo y operación de cada ventilador. Comparar RPM o flujo entre lados cuando el equipo tenga más de uno. Un ruido de roce puede venir de aspas, rodamiento, cable u objeto suelto. Limpiar con el equipo sin energía y evitar hacer girar el ventilador a velocidad excesiva. Tras intervenir, repetir la misma carga y registrar temperatura, frecuencia y ruido.",
+  },
+  {
+    id: "kb-usb-port-basics",
+    title: "Puerto USB sin datos o alimentación",
+    tags: ["usb", "usb-port", "vbus", "peripheral", "port-power"],
+    content:
+      "Probar el mismo periférico y cable en otro puerto y un periférico conocido en el puerto afectado. Separar ausencia de VBUS de falla de enumeración de datos. Inspeccionar pines y daño mecánico sin energizar. Si falta alimentación, medir VBUS y revisar protección, switch de carga y señales de habilitación según esquema. No puentear fusibles ni protecciones; un corto en el periférico también puede desactivar el puerto.",
+  },
+  {
+    id: "kb-display-cable-hinge",
+    title: "Parpadeo de pantalla al mover la tapa",
+    tags: ["display-cable", "hinge", "flicker", "internal-display", "external-display"],
+    content:
+      "Si la imagen interna cambia al mover la tapa mientras el monitor externo permanece estable, registrar posiciones y reproducibilidad antes de desarmar. Con energía desconectada, inspeccionar cable eDP/LVDS, conectores, ruta por bisagras y puntos de pellizco. No asumir automáticamente panel o cable: una bisagra dañada, conector flojo o alimentación de backlight también puede producir intermitencia. Evitar flexionar repetidamente para no agravar el daño.",
+  },
+  {
+    id: "kb-liquid-damage-input",
+    title: "Teclado y entrada después de derrame",
+    tags: ["liquid-damage", "keyboard", "touchpad", "corrosion", "input-device"],
+    content:
+      "Después de un derrame, apagar, desconectar cargador y batería cuando sea seguro y evitar nuevas pruebas energizadas hasta inspeccionar. Documentar líquido, tiempo transcurrido y si fue encendido después. Comparar teclado o mouse externo para separar dispositivo interno de sistema. Inspeccionar flex, conectores y residuos; la ausencia de daño exterior no descarta corrosión. No garantizar recuperación sin revisar la placa y los módulos afectados.",
+  },
+  {
+    id: "kb-camera-detection",
+    title: "Cámara no detectada en Windows",
+    tags: ["camera", "privacy-shutter", "device-manager", "driver", "windows-update"],
+    content:
+      "Comprobar obturador o tecla física, permisos de privacidad y si la cámara aparece en Administrador de dispositivos. Probar la aplicación Cámara para separar un problema global de una aplicación concreta. Tras una actualización, revisar el controlador OEM y cambios de hardware; reinstalar o usar el controlador UVC genérico sólo cuando corresponda, porque puede perder funciones específicas. Si no aparece tampoco en firmware o diagnóstico OEM, investigar conexión y hardware.",
+  },
 ] as const;
 
 type TagRule = {
@@ -100,6 +184,62 @@ const tagRules: readonly TagRule[] = [
   { tag: "ec", patterns: [/\bec\b/, /\bembedded controller\b/, /\bcontrolador embebido\b/] },
   { tag: "firmware", patterns: [/\bfirmware\b/, /\breprogram(?:ar|acion)\b/] },
   { tag: "spi", patterns: [/\bspi\b/, /\bflash rom\b/] },
+  { tag: "storage", patterns: [/\balmacenamiento\b/, /\bdisco\b/, /\bunidad\b/, /\bhdd\b/, /\bssd\b/, /\bnvme\b/] },
+  { tag: "data-backup", patterns: [/\bcopia (?:de )?datos\b/, /\bbackup\b/, /\brespald(?:o|ar)\b/, /\bdatos que (?:conservar|recuperar)\b/] },
+  { tag: "smart", patterns: [/\bsmart\b/, /\berrores? de medio\b/] },
+  { tag: "filesystem", patterns: [/\bfilesystem\b/, /\bsistema de archivos\b/, /\barchivos dañados\b/, /\bchkdsk\b/] },
+  { tag: "read-errors", patterns: [/\berrores? de lectura\b/, /\bno (?:encuentra|abre) (?:el sistema|archivos)\b/] },
+  { tag: "hdd", patterns: [/\bhdd\b/, /\bdisco (?:duro|rigido)\b/] },
+  { tag: "mechanical-noise", patterns: [/\bclic(?:s|keo)?\b/, /\bclacs?\b/, /\bsilbido(?:s)?\b/, /\bruido de roce\b/] },
+  { tag: "clicking", patterns: [/\bclic(?:s|keo)?\b/, /\bclacs?\b/] },
+  { tag: "ssd", patterns: [/\bssd\b/, /\bunidad de estado solido\b/] },
+  { tag: "nvme", patterns: [/\bnvme\b/, /\bm\.2\b/] },
+  { tag: "storage-detection", patterns: [/\bno (?:figura|aparece|detecta|reconoce)\b[^.]{0,40}\b(?:ssd|nvme|disco|unidad)\b/, /\b(?:ssd|nvme|disco|unidad)\b[^.]{0,40}\bno (?:figura|aparece|detecta|reconoce)\b/] },
+  { tag: "bios-storage", patterns: [/\b(?:ssd|nvme|disco|unidad)\b[^.]{0,40}\bbios\b/, /\bbios\b[^.]{0,40}\b(?:ssd|nvme|disco|unidad)\b/, /\bno bootable device\b/] },
+  { tag: "pcie-storage", patterns: [/\bpcie\b/, /\bnvme\b/] },
+  { tag: "ram", patterns: [/\bram\b/, /\bmemoria\b/, /\bmodulo(?:s)?\b[^.]{0,20}\bmemoria\b/] },
+  { tag: "memory-test", patterns: [/\bprueba (?:de )?memoria\b/, /\bdiagnostico (?:de )?memoria\b/, /\bciclos? de memoria\b/] },
+  { tag: "memory-module", patterns: [/\bmodulo(?:s)?\b/, /\bampli(?:ar|acion) (?:de )?(?:ram|memoria)\b/] },
+  { tag: "memory-slot", patterns: [/\branura(?:s)?\b/, /\bslot(?:s)?\b/] },
+  { tag: "bsod", patterns: [/\bpantalla azul\b/, /\bbsod\b/, /\berrores? diferentes\b/] },
+  { tag: "windows-boot", patterns: [/\bwindows no inicia\b/, /\bno inicia windows\b/, /\breparacion automatica\b/, /\bwinre\b/, /\binaccessible_boot_device\b/] },
+  { tag: "winre", patterns: [/\bwinre\b/, /\breparacion automatica\b/, /\bentorno de recuperacion\b/] },
+  { tag: "startup-repair", patterns: [/\breparacion de inicio\b/, /\bstartup repair\b/] },
+  { tag: "boot-loop", patterns: [/\bbucle (?:de )?(?:arranque|inicio)\b/, /\bentra siempre en reparacion automatica\b/] },
+  { tag: "bcd", patterns: [/\bbcd\b/, /\bconfiguracion de arranque\b/] },
+  { tag: "windows-corruption", patterns: [/\bcorrupcion\b/, /\barchivos dañados\b/, /\bdism\b/, /\bsfc\b/] },
+  { tag: "dism", patterns: [/\bdism\b/] },
+  { tag: "sfc", patterns: [/\bsfc\b/, /\bscannow\b/] },
+  { tag: "chkdsk", patterns: [/\bchkdsk\b/, /\brevisa (?:el )?disco\b/] },
+  { tag: "slow-boot", patterns: [/\binicia (?:muy )?lento\b/, /\barranque lento\b/] },
+  { tag: "overheating", patterns: [/\bse calienta\b/, /\bmuy caliente\b/, /\btemperatura\b/, /\b(?:9[5-9]|100)\s*°?c\b/] },
+  { tag: "thermal-throttling", patterns: [/\bthrottling\b/, /\blimite termico\b/, /\breduce frecuencia\b/, /\bbaja (?:de )?rendimiento\b/] },
+  { tag: "high-temperature", patterns: [/\b(?:9[5-9]|100)\s*°?c\b/, /\btemperatura alta\b/] },
+  { tag: "shutdown-load", patterns: [/\bse apaga\b[^.]{0,35}\b(?:jugar|carga|render)\b/, /\bapagado\b[^.]{0,35}\bcarga\b/] },
+  { tag: "performance-drop", patterns: [/\bbaja (?:de )?rendimiento\b/, /\breduce frecuencia\b/, /\bse vuelve (?:muy )?lenta\b/] },
+  { tag: "fan", patterns: [/\bventilador(?:es)?\b/] },
+  { tag: "airflow", patterns: [/\bflujo de aire\b/, /\bsale aire\b/] },
+  { tag: "dust", patterns: [/\bpolvo\b/] },
+  { tag: "cooling", patterns: [/\brefrigeracion\b/, /\bdisipador\b/, /\bventilador(?:es)?\b/] },
+  { tag: "usb", patterns: [/\busb(?:-c)?\b/] },
+  { tag: "usb-port", patterns: [/\bpuerto usb\b/, /\busb\b[^.]{0,20}\bpuerto\b/] },
+  { tag: "vbus", patterns: [/\bvbus\b/, /\bpuerto\b[^.]{0,25}\bno entrega 5\s*v\b/] },
+  { tag: "peripheral", patterns: [/\bmouse\b/, /\bteclado externo\b/, /\bperiferico\b/] },
+  { tag: "port-power", patterns: [/\bpuerto\b[^.]{0,25}\b(?:5\s*v|alimentacion)\b/] },
+  { tag: "display-cable", patterns: [/\bcable (?:de )?(?:pantalla|display|edp|lvds)\b/, /\bflex (?:de )?(?:pantalla|display)\b/] },
+  { tag: "hinge", patterns: [/\bbisagra\b/, /\bmover (?:la )?(?:tapa|pantalla)\b/, /\babrir[^.]{0,15}cerrar (?:la )?tapa\b/] },
+  { tag: "flicker", patterns: [/\bparpadea\b/, /\bparpadeo\b/, /\bdestella\b/] },
+  { tag: "internal-display", patterns: [/\bpantalla interna\b/, /\bmover (?:la )?tapa\b/] },
+  { tag: "liquid-damage", patterns: [/\bderram(?:e|o|ar)\b/, /\bagua\b/, /\bliquido\b/] },
+  { tag: "keyboard", patterns: [/\bteclado\b/, /\bteclas\b/] },
+  { tag: "touchpad", patterns: [/\btouchpad\b/, /\btrackpad\b/] },
+  { tag: "corrosion", patterns: [/\bcorrosion\b/, /\bresiduos\b/] },
+  { tag: "input-device", patterns: [/\bteclado\b/, /\btouchpad\b/, /\bmouse\b/] },
+  { tag: "camera", patterns: [/\bcamara\b/, /\bwebcam\b/] },
+  { tag: "privacy-shutter", patterns: [/\bobturador\b/, /\bprivacidad\b[^.]{0,20}\bcamara\b/] },
+  { tag: "device-manager", patterns: [/\badministrador de dispositivos\b/] },
+  { tag: "driver", patterns: [/\bcontrolador(?:es)?\b/, /\bdriver(?:s)?\b/] },
+  { tag: "windows-update", patterns: [/\bactualizacion (?:de )?windows\b/, /\bwindows update\b/] },
 ] as const;
 
 function normalizeSearchText(value: string): string {

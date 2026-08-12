@@ -6,6 +6,7 @@ import {
 } from "./diagnostic-analysis";
 import {
   buildDiagnosisRequestContent,
+  classifyLocalAIError,
   parseDiagnosticAnalysisResponse,
 } from "./webllm-local-ai-service";
 
@@ -52,11 +53,32 @@ describe("diagnostic analysis model boundary", () => {
     )).toEqual(analysis);
   });
 
+  it("accepts valid JSON wrapped by a small model in a Markdown fence", () => {
+    expect(parseDiagnosticAnalysisResponse(
+      `\`\`\`json\n${JSON.stringify(analysis)}\n\`\`\``,
+      ["kb-standby-rails"],
+    )).toEqual(analysis);
+  });
+
+  it("accepts a valid object surrounded by explanatory text", () => {
+    expect(parseDiagnosticAnalysisResponse(
+      `Resultado local:\n${JSON.stringify(analysis)}\nFin.`,
+      ["kb-standby-rails"],
+    )).toEqual(analysis);
+  });
+
   it("rejects source ids outside the retrieved documents", () => {
     expect(() => parseDiagnosticAnalysisResponse(
       JSON.stringify({ ...analysis, sources: ["kb-invented"] }),
       ["kb-standby-rails"],
     )).toThrow("fuente que no fue recuperada");
+  });
+
+  it("rejects an empty citation list when retrieval found documents", () => {
+    expect(() => parseDiagnosticAnalysisResponse(
+      JSON.stringify({ ...analysis, sources: [] }),
+      ["kb-standby-rails"],
+    )).toThrow("no citó la documentación recuperada");
   });
 
   it("rejects malformed or extra output fields", () => {
@@ -82,5 +104,28 @@ describe("AI suggestion event representation", () => {
 
   it("keeps legacy plain AI suggestions readable", () => {
     expect(parseDiagnosticAnalysisEvent("Hipótesis antigua en texto plano.")).toBeNull();
+  });
+});
+
+describe("local AI runtime errors", () => {
+  it("turns a D3D12 device hang into a blocking user-facing failure", () => {
+    const failure = classifyLocalAIError(
+      new Error("DXGI_ERROR_DEVICE_HUNG: Device was lost"),
+      "Modelo de prueba",
+    );
+
+    expect(failure).toMatchObject({
+      code: "GPU_DEVICE_LOST",
+      blocksAI: true,
+    });
+    expect(failure.message).toContain("Modelo de prueba");
+    expect(failure.message).toContain("reiniciá Chrome");
+  });
+
+  it("keeps an unknown execution error retryable", () => {
+    expect(classifyLocalAIError(new Error("unexpected failure"))).toMatchObject({
+      code: "MODEL_EXECUTION_FAILED",
+      blocksAI: false,
+    });
   });
 });

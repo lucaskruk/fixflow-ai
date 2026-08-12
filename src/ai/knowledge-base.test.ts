@@ -33,8 +33,8 @@ const events: RepairEvent[] = [
 ];
 
 describe("local knowledge retrieval", () => {
-  it("contains the eight curated diagnostic topics", () => {
-    expect(knowledgeDocuments).toHaveLength(8);
+  it("contains the curated diagnostic topics", () => {
+    expect(knowledgeDocuments).toHaveLength(20);
     expect(knowledgeDocuments.map((document) => document.id)).toEqual([
       "kb-no-power-sequence",
       "kb-input-power-stage",
@@ -44,6 +44,18 @@ describe("local knowledge retrieval", () => {
       "kb-battery-charging",
       "kb-no-image",
       "kb-bios-ec-basics",
+      "kb-storage-data-preservation",
+      "kb-hdd-mechanical-failure",
+      "kb-nvme-detection",
+      "kb-memory-isolation",
+      "kb-windows-boot-recovery",
+      "kb-windows-system-files",
+      "kb-thermal-throttling",
+      "kb-cooling-system",
+      "kb-usb-port-basics",
+      "kb-display-cable-hinge",
+      "kb-liquid-damage-input",
+      "kb-camera-detection",
     ]);
   });
 
@@ -93,5 +105,64 @@ describe("local knowledge retrieval", () => {
     };
 
     expect(retrieveKnowledgeDocuments(unrelatedRepair, [priorSuggestion])).toEqual([]);
+  });
+
+  it("retrieves HDD safety guidance for clicks and missing Windows boot", () => {
+    const hddRepair = {
+      ...repair,
+      id: "FF-HDD",
+      reportedIssue:
+        "No inicia Windows, hace clics y silbidos propios del disco rígido.",
+    };
+
+    expect(retrieveKnowledgeDocuments(hddRepair, []).map(({ id }) => id)).toEqual([
+      "kb-hdd-mechanical-failure",
+      "kb-storage-data-preservation",
+      "kb-windows-boot-recovery",
+    ]);
+  });
+
+  it("retrieves thermal and cooling guidance for measured throttling", () => {
+    const thermalRepair = {
+      ...repair,
+      id: "FF-THERMAL",
+      reportedIssue:
+        "Se calienta mucho, el ventilador suena fuerte y se apaga al jugar.",
+    };
+    const thermalEvent: RepairEvent = {
+      id: "EV-THERMAL",
+      repairId: thermalRepair.id,
+      type: "MEASUREMENT",
+      content:
+        "CPU alcanza 99 °C bajo carga y reduce frecuencia antes del apagado.",
+      createdAt: "2026-08-12T10:10:00.000Z",
+    };
+
+    expect(
+      retrieveKnowledgeDocuments(thermalRepair, [thermalEvent]).map(({ id }) => id),
+    ).toEqual([
+      "kb-thermal-throttling",
+      "kb-cooling-system",
+    ]);
+  });
+
+  it("retrieves hinge cable guidance for reproducible lid flicker", () => {
+    const flickerRepair = {
+      ...repair,
+      id: "FF-FLICKER",
+      reportedIssue: "La pantalla parpadea al mover la tapa.",
+    };
+    const flickerEvent: RepairEvent = {
+      id: "EV-FLICKER",
+      repairId: flickerRepair.id,
+      type: "MEASUREMENT",
+      content:
+        "Monitor externo estable; el parpadeo se reproduce al flexionar la bisagra.",
+      createdAt: "2026-08-12T10:10:00.000Z",
+    };
+
+    expect(
+      retrieveKnowledgeDocuments(flickerRepair, [flickerEvent]).map(({ id }) => id),
+    ).toContain("kb-display-cable-hinge");
   });
 });

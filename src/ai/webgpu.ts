@@ -19,7 +19,7 @@ type GPUAdapterLike = {
   };
 };
 
-type NavigatorWithGPU = Navigator & {
+type NavigatorWithGPU = {
   gpu?: {
     requestAdapter(options?: {
       powerPreference?: "low-power" | "high-performance";
@@ -43,9 +43,9 @@ export async function checkWebGPU(
   }
 
   try {
-    const adapter = await navigatorLike.gpu.requestAdapter({
-      powerPreference: "high-performance",
-    });
+    // Chrome ignores powerPreference on Windows and emits a console warning.
+    // Let the browser select the only available adapter instead.
+    const adapter = await navigatorLike.gpu.requestAdapter();
 
     if (!adapter) {
       return {

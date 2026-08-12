@@ -5,6 +5,8 @@ import { getKnowledgeDocument, retrieveKnowledgeDocuments } from "../ai/knowledg
 import { localAIService, useLocalAIStatus } from "../ai/local-ai";
 import { ApiError, repairsApi } from "../api/repairs";
 import { AppShell } from "../components/AppShell";
+import { LocalAIDebugPanel } from "../components/LocalAIDebugPanel";
+import { LocalAIUnavailableNotice } from "../components/LocalAIUnavailableNotice";
 import { StatePanel } from "../components/StatePanel";
 import { StatusBadge } from "../components/StatusBadge";
 import {
@@ -101,6 +103,9 @@ export function RepairDetail() {
   const [analysisBusy, setAnalysisBusy] = useState(false);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
   const [analysisMessage, setAnalysisMessage] = useState<string | null>(null);
+  const aiBlocked =
+    aiStatus.phase === "unsupported" ||
+    Boolean(aiStatus.failure?.blocksAI);
 
   useEffect(() => {
     void localAIService.probeCompatibility();
@@ -186,9 +191,11 @@ export function RepairDetail() {
       );
     } catch (reason) {
       setAnalysisError(
-        reason instanceof Error
-          ? reason.message
-          : "No pudimos generar el análisis local.",
+        localAIService.getSnapshot().failure
+          ? null
+          : reason instanceof Error
+            ? reason.message
+            : "No pudimos generar el análisis local.",
       );
     } finally {
       setAnalysisBusy(false);
@@ -349,8 +356,8 @@ export function RepairDetail() {
                   onClick={analyzeDiagnosis}
                   disabled={
                     analysisBusy ||
+                    aiBlocked ||
                     aiStatus.phase === "checking" ||
-                    aiStatus.phase === "unsupported" ||
                     aiStatus.phase === "loading" ||
                     aiStatus.phase === "generating"
                   }
@@ -360,7 +367,9 @@ export function RepairDetail() {
                     ? "Cargando modelo…"
                     : analysisBusy || aiStatus.phase === "generating"
                       ? "Analizando…"
-                      : "Analizar diagnóstico"}
+                      : aiBlocked
+                        ? "IA no disponible"
+                        : "Analizar diagnóstico"}
                 </button>
                 {aiStatus.phase === "loading" && (
                   <div className="ai-progress ai-progress--compact">
@@ -370,10 +379,11 @@ export function RepairDetail() {
                     <div><span>{aiStatus.cached ? "Cargando desde caché" : "Descargando modelo local"}</span><strong>{Math.round(aiStatus.progress * 100)}%</strong></div>
                   </div>
                 )}
-                {(aiStatus.phase === "unsupported" || (aiStatus.phase === "error" && !analysisError)) && aiStatus.error && (
-                  <div className="notice notice--error" role="alert">{aiStatus.error}</div>
-                )}
+                {aiStatus.failure && <LocalAIUnavailableNotice failure={aiStatus.failure} />}
                 {analysisError && <div className="notice notice--error" role="alert">{analysisError}</div>}
+                {analysisError && aiStatus.debugOutput?.task === "diagnostic-analysis" && (
+                  <LocalAIDebugPanel output={aiStatus.debugOutput} />
+                )}
                 {analysisMessage && <div className="notice notice--info" role="status">{analysisMessage}</div>}
                 <small>Usa hasta 3 documentos locales. La sugerencia se guarda separada del diagnóstico confirmado.</small>
               </div>

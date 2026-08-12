@@ -65,9 +65,12 @@ unavailable.
 
 ## Browser-local AI requirements
 
-The selected model is `Qwen2.5-0.5B-Instruct-q4f16_1-MLC`, chosen for this
-demo machine (Ryzen 5 2400G, integrated Vega 11 with 2 GB assigned VRAM). Its
-artifacts are approximately 290 MB and WebLLM estimates about 945 MB of VRAM.
+Lightweight intake extraction uses `SmolLM2-360M-Instruct-q4f32_1-MLC`
+(approximately 207 MB download and 580 MB VRAM). Structured diagnostic analysis
+uses `Qwen2.5-0.5B-Instruct-q4f16_1-MLC` (approximately 290 MB and 945 MB VRAM),
+because physical testing showed that SmolLM2 does not reliably follow the
+diagnostic JSON contract. Both remain in the model catalog for a future Settings
+page; machines that cannot run Qwen retain every manual workflow.
 
 - Use a recent Google Chrome with WebGPU and hardware acceleration enabled.
 - The model downloads only after pressing **Procesar con IA**.
@@ -79,11 +82,14 @@ artifacts are approximately 290 MB and WebLLM estimates about 945 MB of VRAM.
 - Diagnostic model output is schema-validated, and cited source IDs are rejected
   unless they belong to the documents retrieved for that analysis.
 
-When WebGPU is unavailable, FixFlow shows a clear warning and keeps the manual
-intake and every CRUD action operational.
+When WebGPU is unavailable, runs out of memory or loses the GPU device, FixFlow
+shows a clear, model-specific warning, disables further AI attempts in that tab
+and keeps manual intake and every CRUD action operational.
 
 The hardware comparison and source-backed choice are documented in
 [docs/model-selection.md](docs/model-selection.md).
+The local diagnostic corpus and its primary references are documented in
+[docs/knowledge-sources.md](docs/knowledge-sources.md).
 
 ## Tests and build
 
