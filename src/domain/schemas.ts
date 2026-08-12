@@ -60,7 +60,30 @@ export const createRepairInputSchema = repairSchema.pick({
   reportedIssue: true,
   accessories: true,
   status: true,
+}).extend({
+  customerPhone: nullableText.optional().default(null),
+  serialNumber: nullableText.optional().default(null),
+  accessories: z.array(requiredText).optional().default([]),
+  status: repairStatusSchema.optional().default("RECEIVED"),
 });
+
+export const updateRepairInputSchema = repairSchema
+  .pick({
+    customerName: true,
+    customerPhone: true,
+    brand: true,
+    model: true,
+    serialNumber: true,
+    reportedIssue: true,
+    accessories: true,
+    status: true,
+    diagnosis: true,
+    solution: true,
+  })
+  .partial()
+  .refine((value) => Object.keys(value).length > 0, {
+    message: "At least one field is required",
+  });
 
 export const repairEventSchema = z.object({
   id: requiredText,
@@ -106,10 +129,10 @@ export type Confidence = z.infer<typeof confidenceSchema>;
 export type RepairDraft = z.infer<typeof repairDraftSchema>;
 export type Repair = z.infer<typeof repairSchema>;
 export type CreateRepairInput = z.infer<typeof createRepairInputSchema>;
+export type UpdateRepairInput = z.infer<typeof updateRepairInputSchema>;
 export type RepairEvent = z.infer<typeof repairEventSchema>;
 export type CreateRepairEventInput = z.infer<
   typeof createRepairEventInputSchema
 >;
 export type KnowledgeDocument = z.infer<typeof knowledgeDocumentSchema>;
 export type DiagnosticAnalysis = z.infer<typeof diagnosticAnalysisSchema>;
-

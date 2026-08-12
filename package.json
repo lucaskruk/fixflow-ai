@@ -9,6 +9,9 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
+    "db:migrate:local": "wrangler d1 migrations apply fixflow-ai --local",
+    "db:reset:local": "wrangler d1 execute fixflow-ai --local --command=\"DROP TABLE IF EXISTS repair_events; DROP TABLE IF EXISTS repairs; DROP TABLE IF EXISTS d1_migrations;\" && npm run db:migrate:local",
+    "db:migrate:remote": "wrangler d1 migrations apply fixflow-ai --remote",
     "preview": "vite preview",
     "deploy": "npm run build && wrangler deploy",
     "cf-typegen": "wrangler types"
@@ -22,6 +25,8 @@
   },
   "devDependencies": {
     "@cloudflare/vite-plugin": "^1.52.0",
+    "@cloudflare/vitest-pool-workers": "^0.21.2",
+    "@types/node": "^26.2.0",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.4",
     "@vitejs/plugin-react": "^6.0.5",
@@ -31,4 +36,3 @@
     "wrangler": "^4.122.0"
   }
 }
-
