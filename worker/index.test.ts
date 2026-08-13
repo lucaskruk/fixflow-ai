@@ -5,7 +5,7 @@ import app, { type Env } from "./index";
 const TEST_USERNAME = "fixflow-test-admin";
 const TEST_PASSWORD = "test-password-only";
 const TEST_PASSWORD_HASH =
-  "pbkdf2_sha256$600000$MDEyMzQ1Njc4OWFiY2RlZg$Yl1-sEP7vMILnVpmeNty_xK55wp0emL27N4rAaX-wxU";
+  "pbkdf2_sha256$100000$MDEyMzQ1Njc4OWFiY2RlZg$hmJnTD2vjN1CkL22eMlo3QlzJQ8Mhd0bteZM8PAv8rU";
 const testEnv: Env = {
   DB: env.DB,
   TEST_MIGRATIONS: env.TEST_MIGRATIONS,

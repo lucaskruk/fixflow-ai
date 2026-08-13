@@ -7,8 +7,8 @@ export const LOCAL_SESSION_COOKIE_NAME = "fixflow_session";
 export const SESSION_IDLE_SECONDS = 30 * 60;
 export const SESSION_ABSOLUTE_SECONDS = 8 * 60 * 60;
 
-const MINIMUM_PBKDF2_ITERATIONS = 600_000;
-const MAXIMUM_PBKDF2_ITERATIONS = 2_000_000;
+const MINIMUM_PBKDF2_ITERATIONS = 100_000;
+const MAXIMUM_PBKDF2_ITERATIONS = 100_000;
 const SESSION_TOKEN_BYTES = 32;
 const CSRF_TOKEN_BYTES = 32;
 const LOGIN_WINDOW_SECONDS = 15 * 60;
@@ -134,7 +134,7 @@ export async function verifyCredentials(
   const verifier = parsePasswordVerifier(encodedPasswordVerifier);
   if (!verifier) {
     throw new Error(
-      "FIXFLOW_AUTH_PASSWORD_HASH must use pbkdf2_sha256$iterations$base64url-salt$base64url-digest with at least 600000 iterations",
+      "FIXFLOW_AUTH_PASSWORD_HASH must use pbkdf2_sha256$100000$base64url-salt$base64url-digest",
     );
   }
 

@@ -258,9 +258,12 @@ npx wrangler secret put FIXFLOW_AUTH_PASSWORD_HASH
 ```
 
 The verifier format is
-`pbkdf2_sha256$600000$<base64url-salt>$<base64url-digest>`. Rotate the proof-of-
-concept credential before using real customer data; the current single shared
-identity does not provide per-technician attribution or MFA.
+`pbkdf2_sha256$100000$<base64url-salt>$<base64url-digest>`. Workers currently
+caps its native PBKDF2 implementation at 100,000 iterations, so the proof-of-
+concept uses a randomly generated high-entropy password, rate limiting, and
+account lockout as compensating controls. Rotate the credential before using
+real customer data; the current single shared identity does not provide
+per-technician attribution or MFA.
 
 `npm run deploy` performs typecheck/build before `wrangler deploy`; it does not
 apply D1 migrations for you. The Worker serves `/api/*` first and uses the Vite
