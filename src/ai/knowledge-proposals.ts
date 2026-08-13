@@ -1,6 +1,5 @@
 import {
   knowledgeProposalCandidateSchema,
-  knowledgeProposalResponseSchema,
   type CreateKnowledgeDocumentInput,
   type KnowledgeDocument,
   type KnowledgeProposalCandidate,
@@ -53,6 +52,35 @@ function normalizeText(value: string): string {
 
 function normalizeTags(tags: readonly string[]): string[] {
   return [...new Set(tags.map(normalizeText).filter(Boolean))].sort();
+}
+
+function normalizeDocumentId(value: unknown, fallback: unknown): string {
+  const slugify = (input: unknown) => typeof input === "string"
+    ? input
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .toLocaleLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-+|-+$/g, "")
+        .slice(0, 100)
+        .replace(/-+$/g, "")
+    : "";
+
+  return slugify(value) || slugify(fallback);
+}
+
+function uniqueDocumentId(
+  preferredId: string,
+  unavailableIds: ReadonlySet<string>,
+): string {
+  if (!unavailableIds.has(preferredId)) return preferredId;
+
+  for (let suffix = 2; suffix <= 99; suffix += 1) {
+    const ending = `-${suffix}`;
+    const candidate = `${preferredId.slice(0, 100 - ending.length).replace(/-+$/g, "")}${ending}`;
+    if (!unavailableIds.has(candidate)) return candidate;
+  }
+  return "";
 }
 
 function sameTags(left: readonly string[], right: readonly string[]): boolean {
@@ -187,26 +215,90 @@ export function parseKnowledgeProposalResponse(
   evidence: readonly KnowledgeProposalRepairEvidence[],
   documents: readonly KnowledgeDocument[],
 ): KnowledgeProposalCandidate[] {
-  const result = knowledgeProposalResponseSchema.safeParse(parseModelJson(content));
-  if (!result.success) {
+  const parsed = parseModelJson(content);
+  if (
+    !parsed ||
+    typeof parsed !== "object" ||
+    Array.isArray(parsed) ||
+    !Array.isArray((parsed as { candidates?: unknown }).candidates)
+  ) {
     throw new Error("Los candidatos no cumplieron el formato esperado. No se guardó ningún documento.");
   }
 
   const allowedRepairIds = new Set(evidence.filter(isConfirmedEvidence).map(({ repairId }) => repairId));
   const allowedDocumentIds = new Set(documents.map(({ id }) => id));
-  for (const candidate of result.data.candidates) {
+  const rawCandidates = (parsed as { candidates: unknown[] }).candidates.slice(0, 3);
+  if (rawCandidates.length === 0) return [];
+
+  const candidates: KnowledgeProposalCandidate[] = [];
+  let rejectedProvenance = false;
+  let rejectedTarget = false;
+
+  for (const rawCandidate of rawCandidates) {
+    const normalizedUpdateCandidate =
+      rawCandidate &&
+      typeof rawCandidate === "object" &&
+      !Array.isArray(rawCandidate) &&
+      (rawCandidate as { operation?: unknown }).operation === "update" &&
+      typeof (rawCandidate as { targetDocumentId?: unknown }).targetDocumentId === "string" &&
+      allowedDocumentIds.has(
+        (rawCandidate as { targetDocumentId: string }).targetDocumentId,
+      )
+        ? {
+            ...rawCandidate,
+            // The target is authoritative for updates. Small local models can
+            // otherwise invent a second ID even when the target is valid.
+            id: (rawCandidate as { targetDocumentId: string }).targetDocumentId,
+          }
+        : rawCandidate;
+    const normalizedCandidate =
+      normalizedUpdateCandidate &&
+      typeof normalizedUpdateCandidate === "object" &&
+      !Array.isArray(normalizedUpdateCandidate) &&
+      (normalizedUpdateCandidate as { operation?: unknown }).operation === "new"
+        ? {
+            ...normalizedUpdateCandidate,
+            id: uniqueDocumentId(
+              normalizeDocumentId(
+                (normalizedUpdateCandidate as { id?: unknown }).id,
+                (normalizedUpdateCandidate as { title?: unknown }).title,
+              ),
+              new Set([
+                ...allowedDocumentIds,
+                ...candidates.map(({ id }) => id),
+              ]),
+            ),
+          }
+        : normalizedUpdateCandidate;
+    const result = knowledgeProposalCandidateSchema.safeParse(normalizedCandidate);
+    if (!result.success) continue;
+
+    const candidate = result.data;
     if (candidate.sourceRepairIds.some((id) => !allowedRepairIds.has(id))) {
-      throw new Error("Un candidato citó una reparación sin evidencia confirmada. No se guardó ningún documento.");
+      rejectedProvenance = true;
+      continue;
     }
     if (
       candidate.operation === "update" &&
       (!candidate.targetDocumentId || !allowedDocumentIds.has(candidate.targetDocumentId))
     ) {
-      throw new Error("Un candidato intentó actualizar un documento que no fue enviado al modelo.");
+      rejectedTarget = true;
+      continue;
     }
+    candidates.push(candidate);
   }
 
-  return deduplicateKnowledgeProposals(result.data.candidates, documents);
+  if (candidates.length === 0) {
+    if (rejectedProvenance) {
+      throw new Error("Un candidato citó una reparación sin evidencia confirmada. No se guardó ningún documento.");
+    }
+    if (rejectedTarget) {
+      throw new Error("Un candidato intentó actualizar un documento que no fue enviado al modelo.");
+    }
+    throw new Error("Los candidatos no cumplieron el formato esperado. No se guardó ningún documento.");
+  }
+
+  return deduplicateKnowledgeProposals(candidates, documents);
 }
 
 export function classifyKnowledgeProposal(

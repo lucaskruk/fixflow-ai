@@ -189,21 +189,18 @@ export function createKnowledgeProposalJsonSchema(
           properties: {
             operation: { enum: ["new", "update"] },
             targetDocumentId,
-            id: {
-              type: "string",
-              minLength: 1,
-              maxLength: 100,
-              pattern: "^[a-z0-9]+(?:-[a-z0-9]+)*$",
-            },
-            title: { type: "string", minLength: 1, maxLength: 180 },
+            // XGrammar currently ignores pattern and string-length keywords.
+            // Runtime Zod validation below remains authoritative for them.
+            id: { type: "string" },
+            title: { type: "string" },
             tags: {
               type: "array",
               minItems: 1,
               maxItems: 12,
               uniqueItems: true,
-              items: { type: "string", minLength: 1, maxLength: 100 },
+              items: { type: "string" },
             },
-            content: { type: "string", minLength: 1, maxLength: 6_000 },
+            content: { type: "string" },
             sourceRepairIds: {
               type: "array",
               minItems: 1,

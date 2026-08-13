@@ -428,13 +428,6 @@ export function RepairDetail() {
                 {eventSubmitting ? "Guardando…" : "Agregar al historial"}
               </button>
               <div className="ai-action-placeholder">
-                <KnowledgeRetrievalPreview
-                  documents={retrievedKnowledgeDocuments}
-                  onRefresh={() => void refreshKnowledgeRetrieval()}
-                  refreshing={retrievalRefreshing}
-                  error={retrievalError}
-                  message={retrievalMessage}
-                />
                 <button
                   className="button button--ai button--full"
                   type="button"
@@ -459,6 +452,13 @@ export function RepairDetail() {
                         ? "IA no disponible"
                         : "Analizar diagnóstico"}
                 </button>
+                <KnowledgeRetrievalPreview
+                  documents={retrievedKnowledgeDocuments}
+                  onRefresh={() => void refreshKnowledgeRetrieval()}
+                  refreshing={retrievalRefreshing}
+                  error={retrievalError}
+                  message={retrievalMessage}
+                />
                 {aiStatus.phase === "loading" && (
                   <div className="ai-progress ai-progress--compact">
                     <div className="ai-progress__track" role="progressbar" aria-label="Carga del modelo local" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(aiStatus.progress * 100)}>

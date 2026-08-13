@@ -180,4 +180,82 @@ describe("knowledge proposals", () => {
     expect(() => parseKnowledgeProposalResponse(response, evidence, [document]))
       .toThrow("sin evidencia confirmada");
   });
+
+  it("uses the target document ID when a small model invents another update ID", () => {
+    const evidence = prepareKnowledgeProposalEvidence([delivered], {
+      [delivered.id]: [],
+    });
+    const response = JSON.stringify({
+      candidates: [
+        candidate,
+        {
+          ...candidate,
+          operation: "update",
+          targetDocumentId: document.id,
+          id: "candidato2",
+          title: "Entrada de alimentación ampliada",
+          content: "Comprobar entrada, MOSFET y señales de habilitación.",
+        },
+      ],
+    });
+
+    expect(parseKnowledgeProposalResponse(response, evidence, [document]))
+      .toEqual([
+        candidate,
+        {
+          ...candidate,
+          operation: "update",
+          targetDocumentId: document.id,
+          id: document.id,
+          title: "Entrada de alimentación ampliada",
+          content: "Comprobar entrada, MOSFET y señales de habilitación.",
+        },
+      ]);
+  });
+
+  it("keeps valid siblings when one candidate is malformed", () => {
+    const evidence = prepareKnowledgeProposalEvidence([delivered], {
+      [delivered.id]: [],
+    });
+    const response = JSON.stringify({
+      candidates: [
+        { ...candidate, title: "" },
+        candidate,
+      ],
+    });
+
+    expect(parseKnowledgeProposalResponse(response, evidence, [document]))
+      .toEqual([candidate]);
+  });
+
+  it("normalizes a new document ID like the one emitted by the 1.5B model", () => {
+    const evidence = prepareKnowledgeProposalEvidence([delivered], {
+      [delivered.id]: [],
+    });
+    const rawNewCandidate = {
+      ...candidate,
+      id: "_FF-2026-018",
+      title: "Se vuelve muy lenta durante videollamadas y el teclado se calienta.",
+      sourceRepairIds: [delivered.id],
+    };
+    const rawUpdateCandidate = {
+      ...candidate,
+      operation: "update",
+      targetDocumentId: document.id,
+      id: "_FF-2026-012",
+      title: "Se reinicia al copiar archivos grandes y luego revisa el disco.",
+      tags: ["large-file-copying", "disk-check"],
+      content: "Sin daño exterior visible tras la caída.",
+      sourceRepairIds: [delivered.id],
+    };
+
+    expect(parseKnowledgeProposalResponse(
+      JSON.stringify({ candidates: [rawNewCandidate, rawUpdateCandidate] }),
+      evidence,
+      [document],
+    )).toEqual([
+      { ...rawNewCandidate, id: "ff-2026-018" },
+      { ...rawUpdateCandidate, id: document.id },
+    ]);
+  });
 });
