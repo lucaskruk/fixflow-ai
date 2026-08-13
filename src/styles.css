@@ -259,3 +259,22 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; }
 }
+
+/* Local speech transcription */
+.speech-input-control { display: grid; gap: .55rem; margin-top: .65rem; color: var(--muted); font-size: .7rem; font-weight: 600; }
+.speech-input-control__actions { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
+.speech-input-control__start > span { color: #b64039; font-size: .78rem; }
+.speech-input-control__stop { color: #fff; background: #a53e38; border-color: #a53e38; }
+.speech-input-control__cancel { color: #5d6963; }
+.speech-input-control__feedback { display: grid; gap: .4rem; min-height: 1rem; line-height: 1.4; }
+.speech-input-control--recording .speech-input-control__feedback { color: #7e302c; font-weight: 750; }
+.speech-input-control__progress { display: grid; grid-template-columns: minmax(120px, 240px) auto; gap: .55rem; align-items: center; }
+.speech-input-control__progress-track { height: 6px; overflow: hidden; background: #dfe7e2; border-radius: 999px; }
+.speech-input-control__progress-track > span { display: block; height: 100%; background: var(--green-600); border-radius: inherit; transition: width .18s ease; }
+.speech-input-control__progress strong { color: #53605b; font-size: .65rem; font-variant-numeric: tabular-nums; }
+.speech-input-control__error { margin: 0; padding: .55rem .65rem; color: #85312d; line-height: 1.45; background: #fae9e8; border: 1px solid #efcac7; border-radius: 8px; }
+
+@media (max-width: 480px) {
+  .speech-input-control__actions .button { flex: 1; }
+  .speech-input-control__progress { grid-template-columns: 1fr auto; }
+}

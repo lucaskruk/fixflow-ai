@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { useLocalComputeStatus } from "../ai/local-compute-coordinator";
 import { localAIService, useLocalAIStatus } from "../ai/local-ai";
 import {
   getLocalAIModel,
@@ -19,6 +20,7 @@ function emptyCacheState(): CacheState {
 
 export function Settings() {
   const aiStatus = useLocalAIStatus();
+  const computeStatus = useLocalComputeStatus();
   const [cacheState, setCacheState] = useState<CacheState>(emptyCacheState);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -151,11 +153,14 @@ export function Settings() {
               onClick={downloadSelectedModel}
               disabled={
                 runtimeBusy ||
+                computeStatus.activeTask === "speech-transcription" ||
                 aiStatus.phase === "unsupported" ||
                 Boolean(aiStatus.failure?.blocksAI)
               }
             >
-              {aiStatus.phase === "loading"
+              {computeStatus.activeTask === "speech-transcription"
+                ? "Esperando transcripción…"
+                : aiStatus.phase === "loading"
                 ? "Preparando modelo…"
                 : aiStatus.phase === "ready"
                   ? "Modelo listo"

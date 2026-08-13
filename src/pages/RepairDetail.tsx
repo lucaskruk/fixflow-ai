@@ -2,6 +2,7 @@ import { type FormEvent, useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useParams } from "react-router-dom";
 import { parseDiagnosticAnalysisEvent, serializeDiagnosticAnalysis } from "../ai/diagnostic-analysis";
 import { retrieveKnowledgeDocuments } from "../ai/knowledge-base";
+import { useLocalComputeStatus } from "../ai/local-compute-coordinator";
 import { localAIService, useLocalAIStatus } from "../ai/local-ai";
 import { knowledgeApi } from "../api/knowledge";
 import { ApiError, repairsApi } from "../api/repairs";
@@ -13,6 +14,7 @@ import {
 } from "../components/KnowledgeRetrievalPreview";
 import { LocalAIDebugPanel } from "../components/LocalAIDebugPanel";
 import { LocalAIUnavailableNotice } from "../components/LocalAIUnavailableNotice";
+import { SpeechInputControl } from "../components/SpeechInputControl";
 import { StatePanel } from "../components/StatePanel";
 import { StatusBadge } from "../components/StatusBadge";
 import {
@@ -94,6 +96,7 @@ export function RepairDetail() {
   const { id = "" } = useParams();
   const location = useLocation();
   const aiStatus = useLocalAIStatus();
+  const computeStatus = useLocalComputeStatus();
   const initialNotice = (location.state as LocationState)?.notice;
   const [repair, setRepair] = useState<Repair | null>(null);
   const [events, setEvents] = useState<RepairEvent[]>([]);
@@ -125,6 +128,8 @@ export function RepairDetail() {
   const aiBlocked =
     aiStatus.phase === "unsupported" ||
     Boolean(aiStatus.failure?.blocksAI);
+  const speechBusy = computeStatus.activeTask === "speech-transcription";
+  const localAIBusy = computeStatus.activeTask === "local-ai";
 
   useEffect(() => {
     void localAIService.probeCompatibility();
@@ -403,6 +408,11 @@ export function RepairDetail() {
                   placeholder={technicianEventGuidance[eventType].placeholder}
                 />
               </label>
+              <SpeechInputControl
+                value={eventContent}
+                onChange={setEventContent}
+                disabled={localAIBusy || eventSubmitting}
+              />
               {(eventType === "DIAGNOSIS" || eventType === "REPAIR") && (
                 <div className="notice notice--caution event-confirmation-note">
                   <strong>Registro técnico confirmado</strong>
@@ -414,7 +424,7 @@ export function RepairDetail() {
               )}
               {eventError && <div className="notice notice--error" role="alert">{eventError}</div>}
               {eventMessage && <div className="notice notice--info" role="status">{eventMessage}</div>}
-              <button className="button button--primary button--full" type="submit" disabled={eventSubmitting || !eventContent.trim()}>
+              <button className="button button--primary button--full" type="submit" disabled={speechBusy || eventSubmitting || !eventContent.trim()}>
                 {eventSubmitting ? "Guardando…" : "Agregar al historial"}
               </button>
               <div className="ai-action-placeholder">
@@ -431,6 +441,7 @@ export function RepairDetail() {
                   onClick={analyzeDiagnosis}
                   disabled={
                     analysisBusy ||
+                    speechBusy ||
                     aiBlocked ||
                     aiStatus.phase === "checking" ||
                     aiStatus.phase === "loading" ||
@@ -438,7 +449,9 @@ export function RepairDetail() {
                   }
                 >
                   <span aria-hidden="true">✦</span>
-                  {aiStatus.phase === "loading"
+                  {speechBusy
+                    ? "Esperando transcripción…"
+                    : aiStatus.phase === "loading"
                     ? "Cargando modelo…"
                     : analysisBusy || aiStatus.phase === "generating"
                       ? "Analizando…"

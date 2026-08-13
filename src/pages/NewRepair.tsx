@@ -1,10 +1,12 @@
 import { type FormEvent, useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { useLocalComputeStatus } from "../ai/local-compute-coordinator";
 import { localAIService, useLocalAIStatus } from "../ai/local-ai";
 import { repairsApi } from "../api/repairs";
 import { AppShell } from "../components/AppShell";
 import { LocalAIDebugPanel } from "../components/LocalAIDebugPanel";
 import { LocalAIUnavailableNotice } from "../components/LocalAIUnavailableNotice";
+import { SpeechInputControl } from "../components/SpeechInputControl";
 import { repairStatuses, type RepairStatus } from "../domain/schemas";
 import { statusLabels } from "../ui/repair-display";
 
@@ -33,6 +35,7 @@ const initialForm: FormState = {
 export function NewRepair() {
   const navigate = useNavigate();
   const aiStatus = useLocalAIStatus();
+  const computeStatus = useLocalComputeStatus();
   const [intakeText, setIntakeText] = useState("");
   const [manualMode, setManualMode] = useState(false);
   const [form, setForm] = useState<FormState>(initialForm);
@@ -42,6 +45,8 @@ export function NewRepair() {
   const aiBlocked =
     aiStatus.phase === "unsupported" ||
     Boolean(aiStatus.failure?.blocksAI);
+  const speechBusy = computeStatus.activeTask === "speech-transcription";
+  const localAIBusy = computeStatus.activeTask === "local-ai";
 
   useEffect(() => {
     void localAIService.probeCompatibility();
@@ -143,6 +148,12 @@ export function NewRepair() {
               placeholder={'Ejemplo: "Entró una Lenovo IdeaPad 3 de Martín. No enciende. Trajo cargador. El cliente dice que ayer funcionaba normalmente."'}
               autoFocus
             />
+            <SpeechInputControl
+              value={intakeText}
+              onChange={setIntakeText}
+              disabled={localAIBusy}
+              describedBy="intake-help"
+            />
             <section className={`ai-runtime ai-runtime--${aiStatus.phase}`} aria-live="polite">
               <div className="ai-runtime__heading">
                 <div>
@@ -180,8 +191,8 @@ export function NewRepair() {
               <LocalAIDebugPanel output={aiStatus.debugOutput} />
             )}
             <div className="form-actions form-actions--split">
-              <button className="button button--ai" type="button" onClick={processWithAI} disabled={!intakeText.trim() || aiBlocked || aiStatus.phase === "checking" || aiStatus.phase === "loading" || aiStatus.phase === "generating"}>
-                <span aria-hidden="true">✦</span> {aiStatus.phase === "loading" ? "Cargando modelo…" : aiStatus.phase === "generating" ? "Procesando…" : aiBlocked ? "IA no disponible" : "Procesar con IA"}
+              <button className="button button--ai" type="button" onClick={processWithAI} disabled={!intakeText.trim() || speechBusy || aiBlocked || aiStatus.phase === "checking" || aiStatus.phase === "loading" || aiStatus.phase === "generating"}>
+                <span aria-hidden="true">✦</span> {speechBusy ? "Esperando transcripción…" : aiStatus.phase === "loading" ? "Cargando modelo…" : aiStatus.phase === "generating" ? "Procesando…" : aiBlocked ? "IA no disponible" : "Procesar con IA"}
               </button>
               <button className="button button--secondary" type="button" onClick={continueManually}>
                 Continuar manualmente <span aria-hidden="true">→</span>

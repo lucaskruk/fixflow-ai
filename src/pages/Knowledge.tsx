@@ -5,6 +5,7 @@ import {
   selectDeliveredRepairsForKnowledgeProposal,
   selectKnowledgeDocumentsForProposal,
 } from "../ai/knowledge-proposals";
+import { useLocalComputeStatus } from "../ai/local-compute-coordinator";
 import { localAIService, useLocalAIStatus } from "../ai/local-ai";
 import { knowledgeApi } from "../api/knowledge";
 import { repairsApi } from "../api/repairs";
@@ -63,6 +64,7 @@ function normalize(value: string): string {
 
 export function Knowledge() {
   const aiStatus = useLocalAIStatus();
+  const computeStatus = useLocalComputeStatus();
   const [documents, setDocuments] = useState<KnowledgeDocument[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -301,6 +303,7 @@ export function Knowledge() {
               onClick={() => void proposeDocumentationUpdates()}
               disabled={
                 proposalBusy ||
+                computeStatus.activeTask === "speech-transcription" ||
                 aiBlocked ||
                 aiStatus.phase === "checking" ||
                 aiStatus.phase === "loading" ||
@@ -308,7 +311,9 @@ export function Knowledge() {
               }
             >
               <span aria-hidden="true">✦</span>
-              {proposalBusy || aiStatus.phase === "generating"
+              {computeStatus.activeTask === "speech-transcription"
+                ? "Esperando transcripción…"
+                : proposalBusy || aiStatus.phase === "generating"
                 ? "Preparando propuestas…"
                 : "Proponer desde entregadas"}
             </button>

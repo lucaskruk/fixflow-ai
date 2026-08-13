@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { createSafeFinalReportText, canSaveOrExportFinalReport } from "../ai/final-report";
+import { useLocalComputeStatus } from "../ai/local-compute-coordinator";
 import { localAIService, useLocalAIStatus } from "../ai/local-ai";
 import type { Repair, RepairEvent } from "../domain/schemas";
 import { LocalAIDebugPanel } from "./LocalAIDebugPanel";
@@ -18,6 +19,7 @@ function storageKey(repairId: string): string {
 
 export function FinalReportDraft({ repair, events }: FinalReportDraftProps) {
   const aiStatus = useLocalAIStatus();
+  const computeStatus = useLocalComputeStatus();
   const [draft, setDraft] = useState("");
   const [reviewed, setReviewed] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -84,6 +86,7 @@ export function FinalReportDraft({ repair, events }: FinalReportDraftProps) {
   const canFinalize = canSaveOrExportFinalReport(draft, reviewed);
   const generationUnavailable =
     busy ||
+    computeStatus.activeTask === "speech-transcription" ||
     aiStatus.phase === "checking" ||
     aiStatus.phase === "loading" ||
     aiStatus.phase === "generating";
@@ -107,7 +110,9 @@ export function FinalReportDraft({ repair, events }: FinalReportDraftProps) {
         disabled={generationUnavailable}
       >
         <span aria-hidden="true">✦</span>
-        {busy || aiStatus.phase === "generating"
+        {computeStatus.activeTask === "speech-transcription"
+          ? "Esperando transcripción…"
+          : busy || aiStatus.phase === "generating"
           ? "Preparando informe…"
           : aiStatus.failure?.blocksAI || aiStatus.phase === "unsupported"
             ? "Preparar borrador seguro"

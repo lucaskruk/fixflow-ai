@@ -38,6 +38,7 @@ import {
   parseFinalReportResponse,
 } from "./final-report";
 import { checkWebGPU, type WebGPUCompatibility } from "./webgpu";
+import { localComputeCoordinator } from "./local-compute-coordinator";
 
 export type LocalAIPhase =
   | "checking"
@@ -435,7 +436,12 @@ export class WebLLMLocalAIService implements LocalAIService {
     if (this.generationInProgress) {
       throw new Error("Ya hay una generación local en curso.");
     }
-    await this.ensureReady(this.snapshot.modelId);
+    const releaseCompute = localComputeCoordinator.tryAcquire("local-ai");
+    try {
+      await this.ensureReady(this.snapshot.modelId);
+    } finally {
+      releaseCompute();
+    }
   }
 
   async isModelCached(modelId: LocalAIModelId): Promise<boolean> {
@@ -477,6 +483,7 @@ export class WebLLMLocalAIService implements LocalAIService {
     if (this.generationInProgress) {
       throw new Error("Ya hay una generación local en curso.");
     }
+    const releaseCompute = localComputeCoordinator.tryAcquire("local-ai");
     this.generationInProgress = true;
 
     try {
@@ -543,6 +550,7 @@ export class WebLLMLocalAIService implements LocalAIService {
       }
     } finally {
       this.generationInProgress = false;
+      releaseCompute();
     }
   }
 
@@ -554,6 +562,7 @@ export class WebLLMLocalAIService implements LocalAIService {
     if (this.generationInProgress) {
       throw new Error("Ya hay una generación local en curso.");
     }
+    const releaseCompute = localComputeCoordinator.tryAcquire("local-ai");
     this.generationInProgress = true;
     const retrievedDocuments = knowledgeDocuments.slice(0, 3);
     const retrievedSourceIds = retrievedDocuments.map((document) => document.id);
@@ -630,6 +639,7 @@ export class WebLLMLocalAIService implements LocalAIService {
       }
     } finally {
       this.generationInProgress = false;
+      releaseCompute();
     }
   }
 
@@ -640,6 +650,7 @@ export class WebLLMLocalAIService implements LocalAIService {
     if (this.generationInProgress) {
       throw new Error("Ya hay una generación local en curso.");
     }
+    const releaseCompute = localComputeCoordinator.tryAcquire("local-ai");
     this.generationInProgress = true;
     const safeFallback = createSafeFinalReportText(repair, events);
 
@@ -712,6 +723,7 @@ export class WebLLMLocalAIService implements LocalAIService {
       return safeFallback;
     } finally {
       this.generationInProgress = false;
+      releaseCompute();
     }
   }
 
@@ -725,6 +737,7 @@ export class WebLLMLocalAIService implements LocalAIService {
     if (this.generationInProgress) {
       throw new Error("Ya hay una generación local en curso.");
     }
+    const releaseCompute = localComputeCoordinator.tryAcquire("local-ai");
     this.generationInProgress = true;
     const repairIds = evidence.map(({ repairId }) => repairId);
     const documentIds = knowledgeDocuments.map(({ id }) => id);
@@ -802,6 +815,7 @@ export class WebLLMLocalAIService implements LocalAIService {
       }
     } finally {
       this.generationInProgress = false;
+      releaseCompute();
     }
   }
 
