@@ -1,0 +1,9 @@
+/*
+  Content-Security-Policy: default-src 'self'; base-uri 'self'; connect-src 'self' https://huggingface.co https://*.huggingface.co https://*.hf.co https://cas-server.xethub.hf.co https://cas-server.xethub-eu.hf.co https://transfer.xethub.hf.co https://transfer.xethub-eu.hf.co https://us.aws.cdn.hf.co https://us.gcp.cdn.hf.co https://cdn-lfs-us-1.hf.co https://cdn-lfs-eu-1.hf.co https://raw.githubusercontent.com; font-src 'self'; form-action 'self'; frame-ancestors 'none'; img-src 'self' data: blob:; object-src 'none'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; worker-src 'self' blob:
+  Cross-Origin-Opener-Policy: same-origin
+  Cross-Origin-Resource-Policy: same-origin
+  Permissions-Policy: camera=(), geolocation=(), microphone=(self)
+  Referrer-Policy: no-referrer
+  Strict-Transport-Security: max-age=31536000; includeSubDomains
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: DENY

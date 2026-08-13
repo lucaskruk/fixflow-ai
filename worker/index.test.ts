@@ -1,7 +1,62 @@
-import { exports } from "cloudflare:workers";
+import { env } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
+import app, { type Env } from "./index";
 
-const api = exports.default;
+const TEST_USERNAME = "fixflow-test-admin";
+const TEST_PASSWORD = "test-password-only";
+const TEST_PASSWORD_HASH =
+  "pbkdf2_sha256$600000$MDEyMzQ1Njc4OWFiY2RlZg$Yl1-sEP7vMILnVpmeNty_xK55wp0emL27N4rAaX-wxU";
+const testEnv: Env = {
+  DB: env.DB,
+  TEST_MIGRATIONS: env.TEST_MIGRATIONS,
+  FIXFLOW_AUTH_USERNAME: TEST_USERNAME,
+  FIXFLOW_AUTH_PASSWORD_HASH: TEST_PASSWORD_HASH,
+};
+
+let authState: { cookie: string; csrfToken: string } | null = null;
+
+const rawFetch = (url: string, init?: RequestInit) =>
+  app.request(url, init, testEnv);
+
+async function login(): Promise<void> {
+  const response = await rawFetch("https://example.test/api/auth/login", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      origin: "https://example.test",
+    },
+    body: JSON.stringify({ username: TEST_USERNAME, password: TEST_PASSWORD }),
+  });
+  expect(response.status).toBe(200);
+  const body = (await response.json()) as { data: { csrfToken: string } };
+  authState = {
+    cookie: response.headers.get("set-cookie")!.split(";", 1)[0]!,
+    csrfToken: body.data.csrfToken,
+  };
+}
+
+async function authenticatedFetch(url: string, init: RequestInit = {}): Promise<Response> {
+  if (!authState) await login();
+  const request = async () => {
+    const headers = new Headers(init.headers);
+    headers.set("cookie", authState!.cookie);
+    const method = (init.method ?? "GET").toUpperCase();
+    if (!["GET", "HEAD", "OPTIONS"].includes(method)) {
+      headers.set("origin", new URL(url).origin);
+      headers.set("X-CSRF-Token", authState!.csrfToken);
+    }
+    return rawFetch(url, { ...init, headers });
+  };
+
+  let response = await request();
+  if (response.status === 401) {
+    await login();
+    response = await request();
+  }
+  return response;
+}
+
+const api = { fetch: authenticatedFetch };
 
 describe("repairs API", () => {
   it("lists and reads seeded repairs", async () => {

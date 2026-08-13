@@ -24,6 +24,13 @@ npm run db:migrate:local
 npm run dev
 ```
 
+The application requires the single proof-of-concept account configured in
+`.dev.vars`. That ignored file contains only the username and a salted
+PBKDF2-HMAC-SHA-256 verifier; the plaintext password must never be committed.
+Authentication uses an opaque, revocable D1 session, an `HttpOnly` cookie and
+CSRF protection. Sessions expire after 30 minutes without activity or eight
+hours in total.
+
 Wrangler stores local D1 state under `.wrangler/state`. The migration command
 applies only migrations that D1 has not recorded yet; running it again does not
 drop existing tables or repair records. The current migration chain creates the
@@ -66,6 +73,9 @@ The API is served below `/api`:
 
 ```text
 GET    /api/health
+POST   /api/auth/login
+GET    /api/auth/session
+POST   /api/auth/logout
 GET    /api/repairs
 POST   /api/repairs
 GET    /api/repairs/:id
@@ -93,6 +103,11 @@ The web interface provides:
 - local diagnostic suggestions grounded in up to three matched technical documents;
 - a Knowledge administration page with search, tag/status filters and confirmed deletion;
 - a Settings page for a browser-persisted local model choice and cache controls.
+
+Except for health and login, API routes require an authenticated session.
+Mutable requests also require the in-memory CSRF token returned by the login or
+session endpoint. Login attempts are throttled independently by account and
+source to limit brute-force attacks.
 
 “Procesar con IA” loads a browser-local model and proposes an editable repair
 draft. “Analizar diagnóstico” retrieves local documents by deterministic tag
@@ -233,6 +248,19 @@ migrations. Then run:
 npm run db:migrate:remote
 npm run deploy
 ```
+
+Before the first authenticated deployment, upload the username and password
+verifier as encrypted Worker secrets (interactive input avoids shell history):
+
+```bash
+npx wrangler secret put FIXFLOW_AUTH_USERNAME
+npx wrangler secret put FIXFLOW_AUTH_PASSWORD_HASH
+```
+
+The verifier format is
+`pbkdf2_sha256$600000$<base64url-salt>$<base64url-digest>`. Rotate the proof-of-
+concept credential before using real customer data; the current single shared
+identity does not provide per-technician attribution or MFA.
 
 `npm run deploy` performs typecheck/build before `wrangler deploy`; it does not
 apply D1 migrations for you. The Worker serves `/api/*` first and uses the Vite

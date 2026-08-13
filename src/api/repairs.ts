@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { authenticatedFetch } from "../auth/auth-store";
 import {
   createAISuggestionEventInputSchema,
   createRepairInputSchema,
@@ -45,7 +46,7 @@ async function request<T>(
       headers.set("Content-Type", "application/json");
       requestInit.headers = headers;
     }
-    response = await fetch(path, requestInit);
+    response = await authenticatedFetch(path, requestInit);
   } catch {
     throw new ApiError(
       "No pudimos conectar con el servidor. Verificá que esté iniciado.",

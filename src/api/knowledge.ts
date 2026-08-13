@@ -10,6 +10,7 @@ import {
   type UpdateKnowledgeDocumentInput,
 } from "../domain/schemas";
 import { ApiError } from "./repairs";
+import { authenticatedFetch } from "../auth/auth-store";
 
 const documentResponseSchema = z.object({ data: knowledgeDocumentSchema });
 const documentsResponseSchema = z.object({ data: z.array(knowledgeDocumentSchema) });
@@ -30,7 +31,7 @@ async function request<T>(
       headers.set("Content-Type", "application/json");
       requestInit.headers = headers;
     }
-    response = await fetch(path, requestInit);
+    response = await authenticatedFetch(path, requestInit);
   } catch {
     throw new ApiError(
       "No pudimos conectar con el servidor. Verificá que esté iniciado.",

@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
 import { App } from "./App";
 import "./styles.css";
+import { AuthProvider } from "./auth/AuthContext";
 
 if (import.meta.env.DEV) {
   void import("./ai/local-model-benchmark-console").then(
@@ -21,7 +22,7 @@ if (!root) {
 createRoot(root).render(
   <StrictMode>
     <BrowserRouter>
-      <App />
+      <AuthProvider><App /></AuthProvider>
     </BrowserRouter>
   </StrictMode>,
 );

@@ -11,26 +11,240 @@ import {
 } from "../src/domain/schemas";
 import { KnowledgeRepository } from "./knowledge-repository";
 import { RepairRepository } from "./repair-repository";
+import {
+  AuthRepository,
+  type AuthSession,
+  clearSessionCookie,
+  createSessionCookie,
+  hasSameOrigin,
+  isJsonRequest,
+  verifyCredentials,
+} from "./auth";
 
-export interface Env {
-  DB: D1Database;
-}
+export type Env = Cloudflare.Env;
 
 type Variables = {
   repository: RepairRepository;
   knowledgeRepository: KnowledgeRepository;
+  authRepository: AuthRepository;
+  authSession: AuthSession;
 };
 const app = new Hono<{ Bindings: Env; Variables: Variables }>();
 
+function parseLoginInput(value: unknown): { username: string; password: string } | null {
+  if (!value || typeof value !== "object") return null;
+  const record = value as Record<string, unknown>;
+  if (
+    typeof record.username !== "string" ||
+    record.username.length < 1 ||
+    record.username.length > 256 ||
+    typeof record.password !== "string" ||
+    record.password.length < 1 ||
+    record.password.length > 1024
+  ) {
+    return null;
+  }
+  return { username: record.username, password: record.password };
+}
+
+class PayloadTooLargeError extends Error {}
+
+async function readBoundedJson(request: Request, maximumBytes: number): Promise<unknown> {
+  const contentLengthHeader = request.headers.get("content-length");
+  if (contentLengthHeader) {
+    const contentLength = Number(contentLengthHeader);
+    if (
+      !Number.isSafeInteger(contentLength) ||
+      contentLength < 0 ||
+      contentLength > maximumBytes
+    ) {
+      throw new PayloadTooLargeError();
+    }
+  }
+
+  if (!request.body) return JSON.parse("") as unknown;
+  const reader = request.body.getReader();
+  const decoder = new TextDecoder("utf-8", { fatal: true });
+  let body = "";
+  let receivedBytes = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      receivedBytes += value.byteLength;
+      if (receivedBytes > maximumBytes) {
+        await reader.cancel();
+        throw new PayloadTooLargeError();
+      }
+      body += decoder.decode(value, { stream: true });
+    }
+    body += decoder.decode();
+  } catch (error) {
+    if (error instanceof TypeError) {
+      try {
+        await reader.cancel();
+      } catch {
+        // The stream may already be closed after a decoder failure.
+      }
+      throw new SyntaxError("Request body is not valid UTF-8 JSON");
+    }
+    throw error;
+  }
+  return JSON.parse(body) as unknown;
+}
+
+const unixSeconds = () => Math.floor(Date.now() / 1000);
+
 app.use("/api/*", async (context, next) => {
+  context.header("Cache-Control", "private, no-store");
   context.set("repository", new RepairRepository(context.env.DB));
   context.set("knowledgeRepository", new KnowledgeRepository(context.env.DB));
+  context.set("authRepository", new AuthRepository(context.env.DB));
   await next();
 });
 
 app.get("/api/health", (context) =>
   context.json({ status: "ok", service: "fixflow-ai" }),
 );
+
+app.post("/api/auth/login", async (context) => {
+  if (!hasSameOrigin(context.req.raw)) {
+    return context.json(
+      { error: { code: "FORBIDDEN", message: "Request origin is not allowed" } },
+      403,
+    );
+  }
+  if (!isJsonRequest(context.req.raw)) {
+    return context.json(
+      { error: { code: "UNSUPPORTED_MEDIA_TYPE", message: "JSON is required" } },
+      415,
+    );
+  }
+  const input = parseLoginInput(await readBoundedJson(context.req.raw, 8_192));
+  if (!input) {
+    return context.json(
+      { error: { code: "INVALID_REQUEST", message: "Invalid login request" } },
+      400,
+    );
+  }
+
+  const now = unixSeconds();
+  if (
+    await context.var.authRepository.reserveLoginAttempt(
+      context.req.raw,
+      input.username,
+      now,
+    )
+  ) {
+    return context.json(
+      { error: { code: "RATE_LIMITED", message: "Too many login attempts" } },
+      429,
+    );
+  }
+
+  if (
+    !context.env.FIXFLOW_AUTH_USERNAME ||
+    !context.env.FIXFLOW_AUTH_PASSWORD_HASH
+  ) {
+    throw new Error("FixFlow authentication secrets are not configured");
+  }
+  const authenticated = await verifyCredentials(
+    input.username,
+    input.password,
+    context.env.FIXFLOW_AUTH_USERNAME,
+    context.env.FIXFLOW_AUTH_PASSWORD_HASH,
+  );
+  if (!authenticated) {
+    return context.json(
+      {
+        error: {
+          code: "INVALID_CREDENTIALS",
+          message: "Invalid username or password",
+        },
+      },
+      401,
+    );
+  }
+
+  await context.var.authRepository.clearLoginFailures(
+    context.req.raw,
+    input.username,
+  );
+  const { session, token } = await context.var.authRepository.createSession(
+    context.env.FIXFLOW_AUTH_USERNAME,
+    now,
+  );
+  context.header("Set-Cookie", createSessionCookie(context.req.raw, token));
+  return context.json({
+    data: {
+      authenticated: true as const,
+      username: session.username,
+      csrfToken: session.csrfToken,
+    },
+  });
+});
+
+app.use("/api/*", async (context, next) => {
+  const session = await context.var.authRepository.authenticate(
+    context.req.raw,
+    unixSeconds(),
+  );
+  if (!session) {
+    return context.json(
+      { error: { code: "UNAUTHORIZED", message: "Authentication required" } },
+      401,
+    );
+  }
+  context.set("authSession", session);
+
+  const method = context.req.method.toUpperCase();
+  if (!["GET", "HEAD", "OPTIONS"].includes(method)) {
+    if (!hasSameOrigin(context.req.raw)) {
+      return context.json(
+        { error: { code: "FORBIDDEN", message: "Request origin is not allowed" } },
+        403,
+      );
+    }
+    if (
+      method !== "DELETE" &&
+      context.req.path !== "/api/auth/logout" &&
+      !isJsonRequest(context.req.raw)
+    ) {
+      return context.json(
+        { error: { code: "UNSUPPORTED_MEDIA_TYPE", message: "JSON is required" } },
+        415,
+      );
+    }
+    if (
+      !(await context.var.authRepository.csrfMatches(
+        session,
+        context.req.header("X-CSRF-Token") ?? null,
+      ))
+    ) {
+      return context.json(
+        { error: { code: "FORBIDDEN", message: "CSRF validation failed" } },
+        403,
+      );
+    }
+  }
+  await next();
+});
+
+app.get("/api/auth/session", (context) =>
+  context.json({
+    data: {
+      authenticated: true as const,
+      username: context.var.authSession.username,
+      csrfToken: context.var.authSession.csrfToken,
+    },
+  }),
+);
+
+app.post("/api/auth/logout", async (context) => {
+  await context.var.authRepository.deleteSession(context.var.authSession.tokenHash);
+  context.header("Set-Cookie", clearSessionCookie(context.req.raw));
+  return context.body(null, 204);
+});
 
 app.get("/api/repairs", async (context) =>
   context.json({ data: await context.var.repository.list() }),
@@ -154,6 +368,12 @@ app.notFound((context) =>
 );
 
 app.onError((error, context) => {
+  if (error instanceof PayloadTooLargeError) {
+    return context.json(
+      { error: { code: "PAYLOAD_TOO_LARGE", message: "Request body is too large" } },
+      413,
+    );
+  }
   if (error instanceof ZodError) {
     return context.json(
       {
