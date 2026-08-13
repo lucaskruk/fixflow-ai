@@ -1,6 +1,17 @@
 /// <reference lib="webworker" />
 
-import { pipeline, type AutomaticSpeechRecognitionPipeline } from "@huggingface/transformers";
+import {
+  env,
+  pipeline,
+  type AutomaticSpeechRecognitionPipeline,
+} from "@huggingface/transformers";
+
+// Transformers.js defaults to loading the ONNX WASM factory from jsDelivr.
+// Clear that override so Vite's bundled, same-origin factory and WASM asset are
+// used instead. Remote dynamic modules are intentionally blocked by our CSP.
+if (env.backends.onnx.wasm) {
+  delete env.backends.onnx.wasm.wasmPaths;
+}
 
 const MODEL_ID = "onnx-community/whisper-base";
 
