@@ -1,3 +1,5 @@
+import { pbkdf2Sync, timingSafeEqual } from "node:crypto";
+
 const textEncoder = new TextEncoder();
 
 export const SESSION_COOKIE_NAME = "__Host-fixflow_session";
@@ -104,24 +106,15 @@ async function derivePasswordDigest(
   password: string,
   verifier: PasswordVerifier,
 ): Promise<Uint8Array<ArrayBuffer>> {
-  const key = await crypto.subtle.importKey(
-    "raw",
-    textEncoder.encode(password),
-    "PBKDF2",
-    false,
-    ["deriveBits"],
+  return new Uint8Array(
+    pbkdf2Sync(
+      password,
+      verifier.salt,
+      verifier.iterations,
+      verifier.digest.byteLength,
+      "sha256",
+    ),
   );
-  const bits = await crypto.subtle.deriveBits(
-    {
-      name: "PBKDF2",
-      hash: "SHA-256",
-      salt: verifier.salt,
-      iterations: verifier.iterations,
-    },
-    key,
-    verifier.digest.byteLength * 8,
-  );
-  return new Uint8Array(bits);
 }
 
 function constantTimeEqual(
@@ -129,16 +122,7 @@ function constantTimeEqual(
   right: Uint8Array<ArrayBuffer>,
 ): boolean {
   if (left.byteLength !== right.byteLength) return false;
-  const subtle = crypto.subtle as SubtleCrypto & {
-    timingSafeEqual?: (a: BufferSource, b: BufferSource) => boolean;
-  };
-  if (subtle.timingSafeEqual) return subtle.timingSafeEqual(left, right);
-
-  let difference = 0;
-  for (let index = 0; index < left.byteLength; index += 1) {
-    difference |= left[index]! ^ right[index]!;
-  }
-  return difference === 0;
+  return timingSafeEqual(left, right);
 }
 
 export async function verifyCredentials(
