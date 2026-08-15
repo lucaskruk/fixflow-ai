@@ -39,10 +39,12 @@ describe("Vercel AI Gateway Worker client", () => {
     expect(new Headers(init.headers).get("Authorization")).toBe("Bearer secret-key");
     expect(JSON.parse(String(init.body))).toMatchObject({
       model: request.modelId,
+      max_tokens: 640,
       messages: [
         { role: "system" },
         { role: "user" },
       ],
+      reasoning: { enabled: false },
     });
     expect(JSON.parse(String(init.body))).not.toHaveProperty("response_format");
     expect(JSON.parse(String(init.body)).messages[0].content).toContain(

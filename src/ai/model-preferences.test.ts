@@ -48,11 +48,15 @@ describe("local AI model preference", () => {
     expect(loadSelectedAIModelId(storage)).toBe(selected);
   });
 
-  it("migrates a removed Gateway selection to GLM-4.6V-Flash", () => {
+  it("migrates a removed Gateway selection to Qwen 3.7 Flash", () => {
     const storage = createStorage();
     storage.values.set(AI_MODEL_STORAGE_KEY, "google/gemini-3-flash");
 
-    expect(loadSelectedAIModelId(storage)).toBe("zai/glm-4.6v-flash");
+    expect(loadSelectedAIModelId(storage)).toBe("alibaba/qwen3.7-flash");
+  });
+
+  it("uses Qwen 3.7 Flash when there is no saved preference", () => {
+    expect(loadSelectedAIModelId(createStorage())).toBe("alibaba/qwen3.7-flash");
   });
 
   it("keeps the previous local preference as the migration fallback", () => {
@@ -74,6 +78,7 @@ describe("local AI model preference", () => {
     };
 
     expect(loadSelectedLocalAIModelId(storage)).toBe(DEFAULT_LOCAL_AI_MODEL_ID);
+    expect(loadSelectedAIModelId(storage)).toBe("alibaba/qwen3.7-flash");
     expect(() => persistSelectedLocalAIModelId(DEFAULT_LOCAL_AI_MODEL_ID, storage)).not.toThrow();
   });
 });

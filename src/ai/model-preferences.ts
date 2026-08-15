@@ -60,7 +60,7 @@ export function persistSelectedLocalAIModelId(
 export function loadSelectedAIModelId(
   storage: ModelPreferenceStorage | null = browserStorage(),
 ): AIModelId {
-  if (!storage) return DEFAULT_LOCAL_AI_MODEL_ID;
+  if (!storage) return DEFAULT_GATEWAY_AI_MODEL_ID;
   try {
     const stored = storage.getItem(AI_MODEL_STORAGE_KEY);
     if (stored && (isLocalAIModelId(stored) || isGatewayAIModelId(stored))) {
@@ -69,9 +69,12 @@ export function loadSelectedAIModelId(
     if (stored && removedGatewayAIModelIds.has(stored)) {
       return DEFAULT_GATEWAY_AI_MODEL_ID;
     }
-    return loadSelectedLocalAIModelId(storage);
+    const legacyLocalModelId = storage.getItem(LOCAL_AI_MODEL_STORAGE_KEY);
+    return legacyLocalModelId && isLocalAIModelId(legacyLocalModelId)
+      ? legacyLocalModelId
+      : DEFAULT_GATEWAY_AI_MODEL_ID;
   } catch {
-    return DEFAULT_LOCAL_AI_MODEL_ID;
+    return DEFAULT_GATEWAY_AI_MODEL_ID;
   }
 }
 

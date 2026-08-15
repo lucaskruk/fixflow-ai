@@ -7,22 +7,26 @@ import {
 } from "./gateway-model-config";
 
 describe("Vercel AI Gateway model catalog", () => {
-  it("offers only GLM-4.6V-Flash", () => {
+  it("offers the validated low-cost Gateway models", () => {
     expect(gatewayAIModels.map(({ id }) => id)).toEqual([
+      "alibaba/qwen3.7-flash",
+      "poolside/laguna-s-2.1-free",
       "zai/glm-4.6v-flash",
     ]);
   });
 
-  it("uses GLM-4.6V-Flash as the Gateway default", () => {
-    expect(DEFAULT_GATEWAY_AI_MODEL_ID).toBe("zai/glm-4.6v-flash");
+  it("uses Qwen 3.7 Flash as the Gateway default", () => {
+    expect(DEFAULT_GATEWAY_AI_MODEL_ID).toBe("alibaba/qwen3.7-flash");
     expect(getGatewayAIModel(DEFAULT_GATEWAY_AI_MODEL_ID)).toMatchObject({
-      label: "GLM-4.6V-Flash",
-      providerLabel: "Z.AI vía Vercel",
-      contextWindowSize: 128_000,
+      label: "Qwen 3.7 Flash",
+      providerLabel: "Alibaba vía Vercel",
+      contextWindowSize: 991_000,
     });
   });
 
   it("rejects arbitrary model IDs", () => {
+    expect(isGatewayAIModelId("alibaba/qwen3.7-flash")).toBe(true);
+    expect(isGatewayAIModelId("poolside/laguna-s-2.1-free")).toBe(true);
     expect(isGatewayAIModelId("zai/glm-4.6v-flash")).toBe(true);
     expect(isGatewayAIModelId("google/gemini-3-flash")).toBe(false);
   });

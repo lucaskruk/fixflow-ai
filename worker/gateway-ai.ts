@@ -88,7 +88,7 @@ function taskFor(request: GatewayGenerationRequest): GatewayTask {
         system: extractionSystemPrompt,
         user: `Extrae los datos explícitos del siguiente ingreso y devuelve JSON:\n\n${request.input}`,
         schema: repairDraftJsonSchema,
-        maxTokens: 320,
+        maxTokens: 640,
       };
     case "diagnostic-analysis": {
       const documents = request.knowledgeDocuments.slice(0, 3);
@@ -96,7 +96,7 @@ function taskFor(request: GatewayGenerationRequest): GatewayTask {
         system: diagnosisSystemPrompt,
         user: buildDiagnosisRequestContent(request.repair, request.events, documents),
         schema: createDiagnosticAnalysisJsonSchema(documents.map(({ id }) => id)),
-        maxTokens: 950,
+        maxTokens: 1_600,
       };
     }
     case "final-report":
@@ -104,7 +104,7 @@ function taskFor(request: GatewayGenerationRequest): GatewayTask {
         system: finalReportSystemPrompt,
         user: buildFinalReportRequestContent(request.repair, request.events),
         schema: finalReportJsonSchema,
-        maxTokens: 1_150,
+        maxTokens: 1_800,
       };
     case "knowledge-proposal":
       return {
@@ -117,7 +117,7 @@ function taskFor(request: GatewayGenerationRequest): GatewayTask {
           request.evidence.map(({ repairId }) => repairId),
           request.knowledgeDocuments.map(({ id }) => id),
         ),
-        maxTokens: 1_350,
+        maxTokens: 2_400,
       };
   }
 }
@@ -173,6 +173,7 @@ export async function generateWithVercelGateway(
           { role: "system", content: systemContentFor(task) },
           { role: "user", content: task.user },
         ],
+        reasoning: { enabled: false },
         temperature: 0,
         max_tokens: task.maxTokens,
       }),

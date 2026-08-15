@@ -195,11 +195,14 @@ The local diagnostic corpus and its primary references are documented in
 
 ## Optional Vercel AI Gateway
 
-Settings offers GLM-4.6V-Flash (`zai/glm-4.6v-flash`) as the only remote model
-through Vercel AI Gateway. This is an explicit remote mode: only the content
-needed for the selected task is sent through the authenticated Cloudflare
-Worker. The browser never receives the Gateway credential, other model IDs are
-rejected, and model output is still schema-validated before FixFlow uses it.
+Settings offers Qwen 3.7 Flash (`alibaba/qwen3.7-flash`), Laguna S 2.1 Free
+(`poolside/laguna-s-2.1-free`) and GLM-4.6V-Flash (`zai/glm-4.6v-flash`)
+through Vercel AI Gateway. Qwen is the default because it is the lowest-cost
+paid text model in the current catalog; Laguna and GLM are zero-price options.
+This is an explicit remote mode: only the content needed for the selected task
+is sent through the authenticated Cloudflare Worker. The browser never receives
+the Gateway credential, other model IDs are rejected, and model output is still
+schema-validated before FixFlow uses it.
 
 For local development, add the key to the ignored `.dev.vars` file:
 
