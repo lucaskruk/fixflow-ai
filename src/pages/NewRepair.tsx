@@ -158,17 +158,21 @@ export function NewRepair() {
               <div className="ai-runtime__heading">
                 <div>
                   <strong>{aiStatus.modelLabel}</strong>
-                  <span>≈{aiStatus.downloadMB} MB · ≈{aiStatus.vramMB} MB de VRAM</span>
+                  <span>{aiStatus.provider === "local"
+                    ? `≈${aiStatus.downloadMB} MB · ≈${aiStatus.vramMB} MB de VRAM`
+                    : "Vercel AI Gateway · procesamiento remoto por uso"
+                  }</span>
                 </div>
                 <span className="ai-runtime__state">
                   {aiStatus.phase === "unsupported" ? "No compatible" :
                     aiStatus.phase === "loading" ? "Cargando" :
                     aiStatus.phase === "generating" ? "Procesando" :
                     aiStatus.phase === "ready" ? "Listo" :
-                    aiStatus.phase === "error" ? (aiBlocked ? "No disponible" : "Con error") : "Local"}
+                    aiStatus.phase === "error" ? (aiBlocked ? "No disponible" : "Con error") :
+                    aiStatus.provider === "local" ? "Local" : "Nube"}
                 </span>
               </div>
-              {aiStatus.phase === "loading" && (
+              {aiStatus.provider === "local" && aiStatus.phase === "loading" && (
                 <div className="ai-progress">
                   <div className="ai-progress__track" role="progressbar" aria-label="Descarga del modelo local" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(aiStatus.progress * 100)}>
                     <span style={{ width: `${Math.round(aiStatus.progress * 100)}%` }} />
@@ -178,12 +182,17 @@ export function NewRepair() {
                 </div>
               )}
               {aiStatus.phase === "generating" && <p>Extrayendo únicamente la información explícita…</p>}
-              {aiStatus.compatibility?.supported && aiStatus.compatibility.adapterLabel && (
+              {aiStatus.provider === "local" && aiStatus.compatibility?.supported && aiStatus.compatibility.adapterLabel && (
                 <small>GPU: {aiStatus.compatibility.adapterLabel}</small>
               )}
               {aiStatus.failure && <LocalAIUnavailableNotice failure={aiStatus.failure} />}
               {(aiStatus.phase === "idle" || aiStatus.phase === "ready") && (
-                <p>{aiStatus.phase === "ready" ? "Modelo cargado y almacenado en la caché del navegador." : "La primera ejecución descargará el modelo; las siguientes usarán la caché."}</p>
+                <p>{aiStatus.provider === "local"
+                  ? aiStatus.phase === "ready"
+                    ? "Modelo cargado y almacenado en la caché del navegador."
+                    : "La primera ejecución descargará el modelo; las siguientes usarán la caché."
+                  : "El contenido de la tarea se enviará al modelo remoto seleccionado. Revisá siempre el resultado antes de guardarlo."
+                }</p>
               )}
             </section>
             {error && <div className="notice notice--error" role="alert">{error}</div>}

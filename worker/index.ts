@@ -20,6 +20,11 @@ import {
   isJsonRequest,
   verifyCredentials,
 } from "./auth";
+import { gatewayGenerationRequestSchema } from "../src/ai/gateway-contract";
+import {
+  GatewayRequestError,
+  generateWithVercelGateway,
+} from "./gateway-ai";
 
 export type Env = Cloudflare.Env;
 
@@ -246,6 +251,17 @@ app.post("/api/auth/logout", async (context) => {
   return context.body(null, 204);
 });
 
+app.post("/api/ai/gateway/generate", async (context) => {
+  const input = gatewayGenerationRequestSchema.parse(
+    await readBoundedJson(context.req.raw, 512_000),
+  );
+  const result = await generateWithVercelGateway(
+    input,
+    context.env.AI_GATEWAY_API_KEY,
+  );
+  return context.json({ data: result });
+});
+
 app.get("/api/repairs", async (context) =>
   context.json({ data: await context.var.repository.list() }),
 );
@@ -368,6 +384,12 @@ app.notFound((context) =>
 );
 
 app.onError((error, context) => {
+  if (error instanceof GatewayRequestError) {
+    return context.json(
+      { error: { code: error.code, message: error.message } },
+      error.status as 429 | 502 | 503,
+    );
+  }
   if (error instanceof PayloadTooLargeError) {
     return context.json(
       { error: { code: "PAYLOAD_TOO_LARGE", message: "Request body is too large" } },

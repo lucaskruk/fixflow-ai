@@ -459,7 +459,7 @@ export function RepairDetail() {
                   error={retrievalError}
                   message={retrievalMessage}
                 />
-                {aiStatus.phase === "loading" && (
+                {aiStatus.provider === "local" && aiStatus.phase === "loading" && (
                   <div className="ai-progress ai-progress--compact">
                     <div className="ai-progress__track" role="progressbar" aria-label="Carga del modelo local" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(aiStatus.progress * 100)}>
                       <span style={{ width: `${Math.round(aiStatus.progress * 100)}%` }} />
@@ -473,7 +473,7 @@ export function RepairDetail() {
                   <LocalAIDebugPanel output={aiStatus.debugOutput} />
                 )}
                 {analysisMessage && <div className="notice notice--info" role="status">{analysisMessage}</div>}
-                <small>Usa hasta 3 documentos locales. La sugerencia se guarda separada del diagnóstico confirmado.</small>
+                <small>Usa hasta 3 documentos de la base técnica. La sugerencia se guarda separada del diagnóstico confirmado.</small>
               </div>
             </form>
           </aside>

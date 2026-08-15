@@ -328,7 +328,7 @@ export function Knowledge() {
             Usa hasta 8 reparaciones <strong>entregadas</strong> y sólo diagnósticos o
             reparaciones confirmados. Las sugerencias de IA se excluyen de la evidencia.
           </p>
-          <small>El modelo genera candidatos locales; la revisión y confirmación humana son obligatorias.</small>
+          <small>El modelo genera candidatos editables; la revisión y confirmación humana son obligatorias.</small>
         </section>
 
         {aiStatus.failure && <LocalAIUnavailableNotice failure={aiStatus.failure} />}

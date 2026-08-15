@@ -1,20 +1,23 @@
 import { describe, expect, it } from "vitest";
 import { DEFAULT_LOCAL_AI_MODEL_ID } from "./model-config";
 import {
+  AI_MODEL_STORAGE_KEY,
   LOCAL_AI_MODEL_STORAGE_KEY,
+  loadSelectedAIModelId,
   loadSelectedLocalAIModelId,
+  persistSelectedAIModelId,
   persistSelectedLocalAIModelId,
   type ModelPreferenceStorage,
 } from "./model-preferences";
 
-function createStorage(initial?: string): ModelPreferenceStorage & { value: string | null } {
+function createStorage(initial?: string): ModelPreferenceStorage & { values: Map<string, string> } {
   return {
-    value: initial ?? null,
+    values: new Map(initial ? [[LOCAL_AI_MODEL_STORAGE_KEY, initial]] : []),
     getItem(key) {
-      return key === LOCAL_AI_MODEL_STORAGE_KEY ? this.value : null;
+      return this.values.get(key) ?? null;
     },
     setItem(key, value) {
-      if (key === LOCAL_AI_MODEL_STORAGE_KEY) this.value = value;
+      this.values.set(key, value);
     },
   };
 }
@@ -33,6 +36,24 @@ describe("local AI model preference", () => {
     const storage = createStorage("SmolLM2-360M-Instruct-q4f32_1-MLC");
 
     expect(loadSelectedLocalAIModelId(storage)).toBe(DEFAULT_LOCAL_AI_MODEL_ID);
+  });
+
+  it("persists and restores a Vercel AI Gateway model", () => {
+    const storage = createStorage();
+    const selected = "google/gemini-3-flash";
+
+    persistSelectedAIModelId(selected, storage);
+
+    expect(storage.getItem(AI_MODEL_STORAGE_KEY)).toBe(selected);
+    expect(loadSelectedAIModelId(storage)).toBe(selected);
+  });
+
+  it("keeps the previous local preference as the migration fallback", () => {
+    const storage = createStorage("Qwen2.5-1.5B-Instruct-q4f16_1-MLC");
+
+    expect(loadSelectedAIModelId(storage)).toBe(
+      "Qwen2.5-1.5B-Instruct-q4f16_1-MLC",
+    );
   });
 
   it("does not let storage failures break the default selection", () => {

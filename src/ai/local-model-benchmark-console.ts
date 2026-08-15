@@ -1,4 +1,4 @@
-import { localAIService } from "./local-ai";
+import { localModelAIService } from "./local-ai";
 import {
   isLocalAIModelId,
   localAIModels,
@@ -33,7 +33,7 @@ export function installLocalModelBenchmarkConsole(): void {
       console.warn(
         `[FixFlow benchmark] La prueba explícita puede descargar ${modelId} si no está en caché.`,
       );
-      const result = await runLocalModelBenchmark(localAIService, modelId);
+      const result = await runLocalModelBenchmark(localModelAIService, modelId);
       console.table(result);
       return result;
     },

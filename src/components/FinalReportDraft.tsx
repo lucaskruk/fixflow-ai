@@ -50,7 +50,9 @@ export function FinalReportDraft({ repair, events }: FinalReportDraftProps) {
       setMessage(
         generated === safeFallback
           ? "Se preparó un borrador seguro sólo con los registros confirmados. Revisalo y completalo manualmente."
-          : "Borrador generado localmente. Revisalo y corregilo antes de guardarlo o exportarlo.",
+          : aiStatus.provider === "local"
+            ? "Borrador generado localmente. Revisalo y corregilo antes de guardarlo o exportarlo."
+            : "Borrador generado mediante Vercel AI Gateway. Revisalo y corregilo antes de guardarlo o exportarlo.",
       );
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "No pudimos preparar el informe.");
@@ -120,7 +122,7 @@ export function FinalReportDraft({ repair, events }: FinalReportDraftProps) {
               ? "Volver a generar borrador"
               : "Generar borrador del informe"}
       </button>
-      {aiStatus.phase === "loading" && (
+      {aiStatus.provider === "local" && aiStatus.phase === "loading" && (
         <p className="inline-feedback" role="status">
           Cargando {aiStatus.modelLabel}: {Math.round(aiStatus.progress * 100)}%
         </p>

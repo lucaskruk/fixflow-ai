@@ -1,15 +1,15 @@
-import type { LocalAIFailure } from "../ai/webllm-local-ai-service";
+import type { AIFailure } from "../ai/ai-runtime";
 
 export function LocalAIUnavailableNotice({
   failure,
 }: {
-  failure: LocalAIFailure;
+  failure: AIFailure;
 }) {
   return (
     <div
       className="webgpu-warning"
       role="alert"
-      data-local-ai-error={failure.code}
+      data-ai-error={failure.code}
     >
       <strong>{failure.title}</strong>
       <span>{failure.message}</span>

@@ -3,15 +3,17 @@
 FixFlow AI is a local-first proof of concept for laptop repair technicians. The
 current vertical slice includes a functional repair dashboard, manual intake,
 repair detail and timeline UI backed by a Hono API and Cloudflare D1. Browser-local
-AI remains isolated behind `LocalAIService`; CRUD does not depend on AI
+AI remains isolated behind a service boundary; CRUD does not depend on AI
 availability. Repair intake and evidence-based diagnostic suggestions can be
-structured by WebLLM entirely inside the browser.
+structured by WebLLM entirely inside the browser or, when explicitly selected,
+through Vercel AI Gateway.
 
 ## Requirements
 
 - Node.js 22.12 or newer
 - npm 10 or newer
 - A Cloudflare account only for creating/deploying a remote D1 database
+- An optional Vercel AI Gateway account and API key for remote models
 
 ## Local development
 
@@ -76,6 +78,7 @@ GET    /api/health
 POST   /api/auth/login
 GET    /api/auth/session
 POST   /api/auth/logout
+POST   /api/ai/gateway/generate
 GET    /api/repairs
 POST   /api/repairs
 GET    /api/repairs/:id
@@ -102,19 +105,19 @@ The web interface provides:
 - creation of technician notes and measurements without a page reload;
 - local diagnostic suggestions grounded in up to three matched technical documents;
 - a Knowledge administration page with search, tag/status filters and confirmed deletion;
-- a Settings page for a browser-persisted local model choice and cache controls.
+- a Settings page for browser-persisted local or Vercel AI Gateway model choice,
+  with cache controls for local models.
 
 Except for health and login, API routes require an authenticated session.
 Mutable requests also require the in-memory CSRF token returned by the login or
 session endpoint. Login attempts are throttled independently by account and
 source to limit brute-force attacks.
 
-“Procesar con IA” loads a browser-local model and proposes an editable repair
-draft. “Analizar diagnóstico” retrieves local documents by deterministic tag
+“Procesar con IA” uses the selected local or remote model and proposes an editable
+repair draft. “Analizar diagnóstico” retrieves local documents by deterministic tag
 matching, without embeddings or a vector database, and stores the result as an
 `AI_SUGGESTION`. It never changes `repair.diagnosis`; sources are shown with each
-structured analysis. All CRUD workflows remain available when local AI is
-unavailable.
+structured analysis. All CRUD workflows remain available when AI is unavailable.
 
 The 20 curated technical documents are seeded non-destructively into D1 by
 `0003_knowledge_documents.sql`. New documents start as drafts unless explicitly
@@ -176,7 +179,8 @@ testing showed that it does not reliably follow the diagnostic JSON contract.
 - Settings can remove a model from cache only after an explicit confirmation.
 - Changing models unloads the previous engine, and concurrent generations are
   rejected.
-- No repair text or generated output is sent to an external LLM API.
+- No repair text or generated output is sent to an external LLM API while a local
+  Qwen model is selected.
 - Diagnostic model output is schema-validated, and cited source IDs are rejected
   unless they belong to the documents retrieved for that analysis.
 
@@ -188,6 +192,25 @@ The hardware comparison and source-backed choice are documented in
 [docs/model-selection.md](docs/model-selection.md).
 The local diagnostic corpus and its primary references are documented in
 [docs/knowledge-sources.md](docs/knowledge-sources.md).
+
+## Optional Vercel AI Gateway
+
+Settings also offers GPT 5.4 Nano, GPT 5.6 Luna (preview), Gemini 3 Flash and
+Claude Sonnet 4.6 through Vercel AI Gateway. This is an explicit remote mode:
+only the content needed for the selected task is sent through the authenticated
+Cloudflare Worker. The browser never receives the Gateway credential, arbitrary
+model IDs are rejected, and model output is still schema-validated before
+FixFlow uses it.
+
+For local development, add the key to the ignored `.dev.vars` file:
+
+```dotenv
+AI_GATEWAY_API_KEY=your_gateway_key
+```
+
+Remote inference can generate Vercel/provider charges and has different privacy
+properties from WebLLM. The technician must review every draft, diagnostic
+suggestion, report and Knowledge candidate before saving or publishing it.
 
 ### Explicit local model benchmark
 
@@ -255,7 +278,12 @@ verifier as encrypted Worker secrets (interactive input avoids shell history):
 ```bash
 npx wrangler secret put FIXFLOW_AUTH_USERNAME
 npx wrangler secret put FIXFLOW_AUTH_PASSWORD_HASH
+npx wrangler secret put AI_GATEWAY_API_KEY
 ```
+
+`AI_GATEWAY_API_KEY` is optional when only browser-local Qwen models will be
+used. If it is absent, the Worker returns a configuration error for Gateway
+requests and the rest of FixFlow continues working.
 
 The verifier format is
 `pbkdf2_sha256$100000$<base64url-salt>$<base64url-digest>`. Workers currently
