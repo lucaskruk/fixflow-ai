@@ -4,6 +4,7 @@ import {
   type LocalAIModelId,
 } from "./model-config";
 import {
+  DEFAULT_GATEWAY_AI_MODEL_ID,
   isGatewayAIModelId,
   type GatewayAIModelId,
 } from "./gateway-model-config";
@@ -11,6 +12,13 @@ import {
 export const LOCAL_AI_MODEL_STORAGE_KEY = "fixflow.local-ai.model-id";
 export const AI_MODEL_STORAGE_KEY = "fixflow.ai.model-id";
 export type AIModelId = LocalAIModelId | GatewayAIModelId;
+
+const removedGatewayAIModelIds = new Set([
+  "openai/gpt-5.4-nano",
+  "openai/gpt-5.6-luna",
+  "google/gemini-3-flash",
+  "anthropic/claude-sonnet-4.6",
+]);
 
 export type ModelPreferenceStorage = Pick<Storage, "getItem" | "setItem">;
 
@@ -55,9 +63,13 @@ export function loadSelectedAIModelId(
   if (!storage) return DEFAULT_LOCAL_AI_MODEL_ID;
   try {
     const stored = storage.getItem(AI_MODEL_STORAGE_KEY);
-    return stored && (isLocalAIModelId(stored) || isGatewayAIModelId(stored))
-      ? stored
-      : loadSelectedLocalAIModelId(storage);
+    if (stored && (isLocalAIModelId(stored) || isGatewayAIModelId(stored))) {
+      return stored;
+    }
+    if (stored && removedGatewayAIModelIds.has(stored)) {
+      return DEFAULT_GATEWAY_AI_MODEL_ID;
+    }
+    return loadSelectedLocalAIModelId(storage);
   } catch {
     return DEFAULT_LOCAL_AI_MODEL_ID;
   }

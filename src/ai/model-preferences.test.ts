@@ -40,12 +40,19 @@ describe("local AI model preference", () => {
 
   it("persists and restores a Vercel AI Gateway model", () => {
     const storage = createStorage();
-    const selected = "google/gemini-3-flash";
+    const selected = "zai/glm-4.6v-flash";
 
     persistSelectedAIModelId(selected, storage);
 
     expect(storage.getItem(AI_MODEL_STORAGE_KEY)).toBe(selected);
     expect(loadSelectedAIModelId(storage)).toBe(selected);
+  });
+
+  it("migrates a removed Gateway selection to GLM-4.6V-Flash", () => {
+    const storage = createStorage();
+    storage.values.set(AI_MODEL_STORAGE_KEY, "google/gemini-3-flash");
+
+    expect(loadSelectedAIModelId(storage)).toBe("zai/glm-4.6v-flash");
   });
 
   it("keeps the previous local preference as the migration fallback", () => {

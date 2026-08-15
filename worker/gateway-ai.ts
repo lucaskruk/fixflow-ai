@@ -36,10 +36,13 @@ export class GatewayRequestError extends Error {
 type GatewayTask = {
   system: string;
   user: string;
-  schemaName: string;
   schema: object;
   maxTokens: number;
 };
+
+function systemContentFor(task: GatewayTask): string {
+  return `${task.system}\n\nEsquema JSON requerido:\n${JSON.stringify(task.schema)}`;
+}
 
 function mapUpstreamFailure(status: number): GatewayUpstreamFailure {
   switch (status) {
@@ -84,7 +87,6 @@ function taskFor(request: GatewayGenerationRequest): GatewayTask {
       return {
         system: extractionSystemPrompt,
         user: `Extrae los datos explícitos del siguiente ingreso y devuelve JSON:\n\n${request.input}`,
-        schemaName: "repair_draft",
         schema: repairDraftJsonSchema,
         maxTokens: 320,
       };
@@ -93,7 +95,6 @@ function taskFor(request: GatewayGenerationRequest): GatewayTask {
       return {
         system: diagnosisSystemPrompt,
         user: buildDiagnosisRequestContent(request.repair, request.events, documents),
-        schemaName: "diagnostic_analysis",
         schema: createDiagnosticAnalysisJsonSchema(documents.map(({ id }) => id)),
         maxTokens: 950,
       };
@@ -102,7 +103,6 @@ function taskFor(request: GatewayGenerationRequest): GatewayTask {
       return {
         system: finalReportSystemPrompt,
         user: buildFinalReportRequestContent(request.repair, request.events),
-        schemaName: "final_report",
         schema: finalReportJsonSchema,
         maxTokens: 1_150,
       };
@@ -113,7 +113,6 @@ function taskFor(request: GatewayGenerationRequest): GatewayTask {
           request.evidence,
           request.knowledgeDocuments,
         ),
-        schemaName: "knowledge_proposals",
         schema: createKnowledgeProposalJsonSchema(
           request.evidence.map(({ repairId }) => repairId),
           request.knowledgeDocuments.map(({ id }) => id),
@@ -171,17 +170,9 @@ export async function generateWithVercelGateway(
       body: JSON.stringify({
         model: request.modelId,
         messages: [
-          { role: "system", content: task.system },
+          { role: "system", content: systemContentFor(task) },
           { role: "user", content: task.user },
         ],
-        response_format: {
-          type: "json_schema",
-          json_schema: {
-            name: task.schemaName,
-            strict: true,
-            schema: task.schema,
-          },
-        },
         temperature: 0,
         max_tokens: task.maxTokens,
       }),

@@ -5,7 +5,7 @@ import { GatewayAIService } from "./gateway-ai-service";
 describe("GatewayAIService", () => {
   it("extracts and validates a repair draft returned by the remote model", async () => {
     const generate = vi.fn().mockResolvedValue({
-      modelId: "google/gemini-3-flash",
+      modelId: "zai/glm-4.6v-flash",
       finishReason: "stop",
       content: JSON.stringify({
         customerName: "Ana Torres",
@@ -17,7 +17,7 @@ describe("GatewayAIService", () => {
         status: null,
       }),
     });
-    const service = new GatewayAIService("google/gemini-3-flash", generate);
+    const service = new GatewayAIService("zai/glm-4.6v-flash", generate);
 
     await expect(service.extractRepair("Lenovo T14 no enciende")).resolves.toMatchObject({
       customerName: "Ana Torres",
@@ -37,7 +37,7 @@ describe("GatewayAIService", () => {
       503,
       "GATEWAY_NOT_CONFIGURED",
     ));
-    const service = new GatewayAIService("google/gemini-3-flash", generate);
+    const service = new GatewayAIService("zai/glm-4.6v-flash", generate);
 
     await expect(service.extractRepair("Lenovo T14 no enciende")).rejects.toThrow(
       "Falta cargar AI_GATEWAY_API_KEY",
@@ -54,7 +54,7 @@ describe("GatewayAIService", () => {
       502,
       "GATEWAY_AUTH_FAILED",
     ));
-    const service = new GatewayAIService("google/gemini-3-flash", generate);
+    const service = new GatewayAIService("zai/glm-4.6v-flash", generate);
 
     await expect(service.extractRepair("Lenovo T14 no enciende")).rejects.toThrow(
       "Vercel rechazó AI_GATEWAY_API_KEY",

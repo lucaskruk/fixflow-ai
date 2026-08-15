@@ -313,7 +313,7 @@ export function Settings() {
               <p className="section-kicker">Proveedor remoto opcional</p>
               <h2 id="gateway-model-catalog-heading">Vercel AI Gateway</h2>
             </div>
-            <span>Una clave · varios proveedores</span>
+            <span>Un modelo remoto validado</span>
           </div>
           <div className="model-grid">
             {gatewayAIModels.map((model) => {

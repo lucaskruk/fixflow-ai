@@ -3,7 +3,7 @@ import { generateWithVercelGateway, GatewayRequestError } from "./gateway-ai";
 
 const request = {
   task: "repair-extraction" as const,
-  modelId: "google/gemini-3-flash" as const,
+  modelId: "zai/glm-4.6v-flash" as const,
   input: "Lenovo T14 no enciende",
 };
 
@@ -39,8 +39,15 @@ describe("Vercel AI Gateway Worker client", () => {
     expect(new Headers(init.headers).get("Authorization")).toBe("Bearer secret-key");
     expect(JSON.parse(String(init.body))).toMatchObject({
       model: request.modelId,
-      response_format: { type: "json_schema" },
+      messages: [
+        { role: "system" },
+        { role: "user" },
+      ],
     });
+    expect(JSON.parse(String(init.body))).not.toHaveProperty("response_format");
+    expect(JSON.parse(String(init.body)).messages[0].content).toContain(
+      "Esquema JSON requerido",
+    );
   });
 
   it("reports a rejected Gateway key without returning an HTTP 401 to the browser", async () => {

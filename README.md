@@ -195,12 +195,11 @@ The local diagnostic corpus and its primary references are documented in
 
 ## Optional Vercel AI Gateway
 
-Settings also offers GPT 5.4 Nano, GPT 5.6 Luna (preview), Gemini 3 Flash and
-Claude Sonnet 4.6 through Vercel AI Gateway. This is an explicit remote mode:
-only the content needed for the selected task is sent through the authenticated
-Cloudflare Worker. The browser never receives the Gateway credential, arbitrary
-model IDs are rejected, and model output is still schema-validated before
-FixFlow uses it.
+Settings offers GLM-4.6V-Flash (`zai/glm-4.6v-flash`) as the only remote model
+through Vercel AI Gateway. This is an explicit remote mode: only the content
+needed for the selected task is sent through the authenticated Cloudflare
+Worker. The browser never receives the Gateway credential, other model IDs are
+rejected, and model output is still schema-validated before FixFlow uses it.
 
 For local development, add the key to the ignored `.dev.vars` file:
 
