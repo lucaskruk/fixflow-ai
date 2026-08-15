@@ -55,7 +55,7 @@ function gatewayFailure(reason: unknown): AIFailure | null {
   if (reason instanceof ApiError && reason.code === "GATEWAY_ACCESS_DENIED") {
     return {
       code: "GATEWAY_ACCESS_DENIED",
-      title: "Vercel AI Gateway rechazó el acceso",
+      title: "Vercel AI Gateway requiere facturación o acceso",
       message: reason.message,
       blocksAI: true,
     };

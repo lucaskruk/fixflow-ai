@@ -53,7 +53,7 @@ function mapUpstreamFailure(status: number): GatewayUpstreamFailure {
       return {
         status: 502,
         code: "GATEWAY_ACCESS_DENIED",
-        message: "Vercel AI Gateway rechazó el acceso. Revisá los permisos y créditos de la cuenta",
+        message: "Vercel AI Gateway requiere una tarjeta válida para habilitar créditos, o la cuenta no tiene acceso. Revisá la facturación y los permisos en Vercel",
       };
     case 404:
       return {

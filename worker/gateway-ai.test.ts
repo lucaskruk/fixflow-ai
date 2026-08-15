@@ -57,6 +57,20 @@ describe("Vercel AI Gateway Worker client", () => {
     });
   });
 
+  it("reports the billing or access requirement returned as HTTP 403", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      error: { message: "AI Gateway requires a valid credit card on file" },
+    }), { status: 403, headers: { "Content-Type": "application/json" } })));
+
+    const promise = generateWithVercelGateway(request, "valid-key");
+
+    await expect(promise).rejects.toMatchObject({
+      status: 502,
+      code: "GATEWAY_ACCESS_DENIED",
+      message: "Vercel AI Gateway requiere una tarjeta válida para habilitar créditos, o la cuenta no tiene acceso. Revisá la facturación y los permisos en Vercel",
+    });
+  });
+
   it("maps upstream failures without exposing their response to the browser", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({
       error: { message: "provider internal detail" },
