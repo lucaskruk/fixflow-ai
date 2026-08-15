@@ -28,7 +28,7 @@ describe("Vercel AI Gateway Worker client", () => {
     }), { status: 200, headers: { "Content-Type": "application/json" } }));
     vi.stubGlobal("fetch", fetchMock);
 
-    const result = await generateWithVercelGateway(request, "secret-key");
+    const result = await generateWithVercelGateway(request, "  secret-key\n");
 
     expect(result).toMatchObject({
       modelId: request.modelId,
@@ -43,6 +43,20 @@ describe("Vercel AI Gateway Worker client", () => {
     });
   });
 
+  it("reports a rejected Gateway key without returning an HTTP 401 to the browser", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      error: { message: "invalid bearer token" },
+    }), { status: 401, headers: { "Content-Type": "application/json" } })));
+
+    const promise = generateWithVercelGateway(request, "wrong-key");
+
+    await expect(promise).rejects.toMatchObject({
+      status: 502,
+      code: "GATEWAY_AUTH_FAILED",
+      message: "Vercel rechazó AI_GATEWAY_API_KEY. Volvé a cargar el valor de una clave creada en Vercel AI Gateway",
+    });
+  });
+
   it("maps upstream failures without exposing their response to the browser", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({
       error: { message: "provider internal detail" },
@@ -53,8 +67,8 @@ describe("Vercel AI Gateway Worker client", () => {
     await expect(promise).rejects.toBeInstanceOf(GatewayRequestError);
     await expect(promise).rejects.toMatchObject({
       status: 502,
-      code: "GATEWAY_REQUEST_FAILED",
-      message: "Vercel AI Gateway no pudo completar la solicitud",
+      code: "GATEWAY_UNAVAILABLE",
+      message: "Vercel AI Gateway no está disponible temporalmente",
     });
   });
 });

@@ -44,7 +44,36 @@ function gatewayFailure(reason: unknown): AIFailure | null {
       blocksAI: true,
     };
   }
-  if (reason instanceof ApiError && ["NETWORK_ERROR", "GATEWAY_UNAVAILABLE", "GATEWAY_REQUEST_FAILED"].includes(reason.code)) {
+  if (reason instanceof ApiError && reason.code === "GATEWAY_AUTH_FAILED") {
+    return {
+      code: "GATEWAY_AUTH_FAILED",
+      title: "Vercel rechazó la clave del Gateway",
+      message: reason.message,
+      blocksAI: true,
+    };
+  }
+  if (reason instanceof ApiError && reason.code === "GATEWAY_ACCESS_DENIED") {
+    return {
+      code: "GATEWAY_ACCESS_DENIED",
+      title: "Vercel AI Gateway rechazó el acceso",
+      message: reason.message,
+      blocksAI: true,
+    };
+  }
+  if (reason instanceof ApiError && reason.code === "GATEWAY_MODEL_NOT_FOUND") {
+    return {
+      code: "MODEL_FEATURE_UNAVAILABLE",
+      title: "El modelo remoto no está disponible",
+      message: reason.message,
+      blocksAI: false,
+    };
+  }
+  if (reason instanceof ApiError && [
+    "NETWORK_ERROR",
+    "GATEWAY_UNAVAILABLE",
+    "GATEWAY_REQUEST_FAILED",
+    "GATEWAY_RATE_LIMITED",
+  ].includes(reason.code)) {
     return {
       code: "GATEWAY_UNAVAILABLE",
       title: "Vercel AI Gateway no está disponible",

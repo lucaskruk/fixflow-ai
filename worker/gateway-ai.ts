@@ -16,6 +16,12 @@ import { buildKnowledgeProposalRequestContent } from "../src/ai/knowledge-propos
 
 const GATEWAY_URL = "https://ai-gateway.vercel.sh/v1/chat/completions";
 
+type GatewayUpstreamFailure = {
+  status: number;
+  code: string;
+  message: string;
+};
+
 export class GatewayRequestError extends Error {
   constructor(
     readonly status: number,
@@ -34,6 +40,43 @@ type GatewayTask = {
   schema: object;
   maxTokens: number;
 };
+
+function mapUpstreamFailure(status: number): GatewayUpstreamFailure {
+  switch (status) {
+    case 401:
+      return {
+        status: 502,
+        code: "GATEWAY_AUTH_FAILED",
+        message: "Vercel rechazó AI_GATEWAY_API_KEY. Volvé a cargar el valor de una clave creada en Vercel AI Gateway",
+      };
+    case 403:
+      return {
+        status: 502,
+        code: "GATEWAY_ACCESS_DENIED",
+        message: "Vercel AI Gateway rechazó el acceso. Revisá los permisos y créditos de la cuenta",
+      };
+    case 404:
+      return {
+        status: 502,
+        code: "GATEWAY_MODEL_NOT_FOUND",
+        message: "El modelo seleccionado ya no está disponible en Vercel AI Gateway",
+      };
+    case 429:
+      return {
+        status: 429,
+        code: "GATEWAY_RATE_LIMITED",
+        message: "Vercel AI Gateway alcanzó el límite de uso. Volvé a intentar más tarde",
+      };
+    default:
+      return {
+        status: 502,
+        code: status >= 500 ? "GATEWAY_UNAVAILABLE" : "GATEWAY_REQUEST_FAILED",
+        message: status >= 500
+          ? "Vercel AI Gateway no está disponible temporalmente"
+          : "Vercel AI Gateway rechazó la solicitud del modelo",
+      };
+  }
+}
 
 function taskFor(request: GatewayGenerationRequest): GatewayTask {
   switch (request.task) {
@@ -106,7 +149,8 @@ export async function generateWithVercelGateway(
   request: GatewayGenerationRequest,
   apiKey: string | undefined,
 ): Promise<{ modelId: GatewayGenerationRequest["modelId"]; content: string; finishReason: string | null }> {
-  if (!apiKey) {
+  const normalizedApiKey = apiKey?.trim();
+  if (!normalizedApiKey) {
     throw new GatewayRequestError(
       503,
       "GATEWAY_NOT_CONFIGURED",
@@ -120,7 +164,7 @@ export async function generateWithVercelGateway(
     response = await fetch(GATEWAY_URL, {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${apiKey}`,
+        Authorization: `Bearer ${normalizedApiKey}`,
         "Content-Type": "application/json",
         "X-Title": "FixFlow AI",
       },
@@ -161,12 +205,11 @@ export async function generateWithVercelGateway(
       task: request.task,
       upstreamMessage: typeof upstreamMessage === "string" ? upstreamMessage : undefined,
     });
+    const failure = mapUpstreamFailure(response.status);
     throw new GatewayRequestError(
-      response.status === 429 ? 429 : 502,
-      response.status === 429 ? "GATEWAY_RATE_LIMITED" : "GATEWAY_REQUEST_FAILED",
-      response.status === 429
-        ? "Vercel AI Gateway alcanzó el límite de uso. Volvé a intentar más tarde"
-        : "Vercel AI Gateway no pudo completar la solicitud",
+      failure.status,
+      failure.code,
+      failure.message,
     );
   }
 

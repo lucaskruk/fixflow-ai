@@ -285,6 +285,11 @@ npx wrangler secret put AI_GATEWAY_API_KEY
 used. If it is absent, the Worker returns a configuration error for Gateway
 requests and the rest of FixFlow continues working.
 
+When Wrangler prompts for the secret, paste only the key value created under
+Vercel AI Gateway API Keys. Do not paste `AI_GATEWAY_API_KEY=`, quotes, or an
+unrelated Vercel account token. If Vercel rejects the credential, FixFlow keeps
+its own session active and reports that the Gateway key must be replaced.
+
 The verifier format is
 `pbkdf2_sha256$100000$<base64url-salt>$<base64url-digest>`. Workers currently
 caps its native PBKDF2 implementation at 100,000 iterations, so the proof-of-

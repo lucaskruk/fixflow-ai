@@ -47,4 +47,21 @@ describe("GatewayAIService", () => {
       blocksAI: true,
     });
   });
+
+  it("identifies a Gateway key rejected by Vercel", async () => {
+    const generate = vi.fn().mockRejectedValue(new ApiError(
+      "Vercel rechazó AI_GATEWAY_API_KEY. Volvé a cargar el valor de una clave creada en Vercel AI Gateway",
+      502,
+      "GATEWAY_AUTH_FAILED",
+    ));
+    const service = new GatewayAIService("google/gemini-3-flash", generate);
+
+    await expect(service.extractRepair("Lenovo T14 no enciende")).rejects.toThrow(
+      "Vercel rechazó AI_GATEWAY_API_KEY",
+    );
+    expect(service.getSnapshot().failure).toMatchObject({
+      code: "GATEWAY_AUTH_FAILED",
+      blocksAI: true,
+    });
+  });
 });
